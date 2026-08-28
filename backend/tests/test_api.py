@@ -160,3 +160,61 @@ def test_importar_analizar_prefills_confirmation_form(monkeypatch):
     assert "Glucosa en ayunas" in resp.text
     assert "92 mg/dL" in resp.text
     assert 'action="/eventos/nuevo"' in resp.text
+
+
+def test_tendencias_page_loads_with_no_data():
+    resp = client.get("/tendencias")
+    assert resp.status_code == 200
+    assert "suficientes datos" in resp.text
+
+
+def test_trend_data_endpoint_returns_points_in_chronological_order():
+    patient = client.post("/api/patients", json={"full_name": "Paciente de Prueba"}).json()
+
+    # Un evento sin fecha exacta no debe aparecer en la gráfica.
+    client.post(
+        "/api/events",
+        json={
+            "patient_id": patient["id"],
+            "resource_type": "Observation",
+            "event_date_text": "jun-2023",
+            "title": "Colesterol total",
+            "value": "300 mg/dL",
+        },
+    )
+    client.post(
+        "/api/events",
+        json={
+            "patient_id": patient["id"],
+            "resource_type": "Observation",
+            "event_date_text": "24/06/2024",
+            "event_date_sort": "2024-06-24",
+            "title": "Colesterol total",
+            "value": "265 mg/dL",
+            "reference_range": "0 - 200 (óptimo)",
+        },
+    )
+    client.post(
+        "/api/events",
+        json={
+            "patient_id": patient["id"],
+            "resource_type": "Observation",
+            "event_date_text": "24/08/2026",
+            "event_date_sort": "2026-08-24",
+            "title": "Colesterol total",
+            "value": "137 mg/dL",
+        },
+    )
+
+    resp = client.get("/tendencias")
+    assert resp.status_code == 200
+    assert "Colesterol total" in resp.text
+
+    resp = client.get("/api/trends/Colesterol total")
+    assert resp.status_code == 200
+    data = resp.json()
+    # Solo los 2 eventos CON fecha exacta entran a la gráfica.
+    assert [p["date"] for p in data["points"]] == ["2024-06-24", "2026-08-24"]
+    assert data["points"][0]["value"] == 265.0
+    assert data["points"][1]["value"] == 137.0
+    assert data["reference_range"] == [0.0, 200.0]

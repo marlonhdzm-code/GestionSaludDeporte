@@ -50,6 +50,15 @@ Para activarla necesitas tu propia llave de la API de Anthropic:
 
 El archivo `.env` está en `.gitignore` — tu llave nunca se sube al repositorio.
 
+## Tendencias en el tiempo (Fase 2)
+
+La opción "Tendencias" del menú grafica la evolución de cualquier prueba que tenga al menos
+dos registros con fecha exacta y valor numérico (por ejemplo, tu colesterol total bajando de
+265 a 137 mg/dL). El rango de referencia se muestra como una banda de fondo cuando se puede
+interpretar del texto del registro. Chart.js va incluido localmente
+(`backend/app/static/vendor/`) — no depende de ningún servicio externo para dibujar la
+gráfica.
+
 ## Correr las pruebas
 
 ```bash
@@ -71,9 +80,10 @@ GestionSaludDeporte/
 │   │   ├── seed.py           # carga tu registro de salud inicial
 │   │   ├── ai_extract.py     # lee una foto con Claude y la estructura en HealthEvent
 │   │   ├── config.py         # lee ANTHROPIC_API_KEY y demás variables de entorno
+│   │   ├── trends.py         # interpreta "value"/"reference_range" como números para graficar
 │   │   ├── routers/          # rutas de la API JSON y de las páginas web
 │   │   ├── templates/        # páginas HTML (Jinja2)
-│   │   └── static/           # CSS
+│   │   └── static/           # CSS + Chart.js local (vendor/)
 │   └── tests/                # pruebas automáticas (pytest)
 ├── docs/
 │   └── ARQUITECTURA.md       # decisiones de diseño y hoja de ruta hacia IA/multiusuario

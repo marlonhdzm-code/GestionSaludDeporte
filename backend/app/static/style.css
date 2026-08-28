@@ -182,4 +182,29 @@ h1 { color: var(--navy); margin-bottom: 4px; }
   .review-layout { grid-template-columns: 1fr; }
 }
 
+.filters-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 22px;
+}
+.filters-inline label { font-weight: 600; font-size: 0.9rem; }
+.filters-inline select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 240px;
+}
+
+.chart-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
 footer { text-align: center; color: var(--grey); font-size: 0.8rem; padding: 20px; }

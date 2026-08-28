@@ -79,23 +79,51 @@ con el aviso `notes_for_user` cuando la IA no está segura de un campo.
 
 ---
 
-## Fase 2 — Tendencias en el tiempo (planeada, pedida por el usuario)
+## Fase 2 — Tendencias en el tiempo (primera versión lista, 28/08/2026)
 
 **Objetivo:** ver la evolución de cualquier prueba (colesterol, glucosa, TSH...) como una
 gráfica en el tiempo, no como filas sueltas en una tabla.
 
-**Qué incluye:**
+**Cómo quedó implementado:**
 
-- Vista "Tendencias": elegir un analito (por título de `HealthEvent`) y graficar su serie
-  temporal usando `event_date_sort`.
-- El `reference_range` de cada evento se dibuja como banda de fondo, para detectar de un
-  vistazo cuándo un valor cayó fuera de rango.
-- Filtro por categoría FHIR y por rango de fechas.
+- `GET /tendencias` — un `<select>` con los títulos de `HealthEvent` que tienen **al menos 2
+  eventos con `event_date_sort` no nulo y un `value` interpretable como número**
+  (`_chartable_titles()` en `routers/trends.py`). Un evento sin fecha exacta o sin valor
+  numérico simplemente no entra a la gráfica — nunca se inventa un punto.
+- `GET /api/trends/{title}` — devuelve los puntos ordenados por fecha (`date`, `value`
+  numérico, `raw_value` tal como está guardado, `reference_range`, `institution`) más el rango
+  de referencia interpretado del registro más reciente que se pudo entender, como
+  `[mínimo, máximo]`.
+- La página dibuja la serie con Chart.js: la línea de valores, y si hay rango de referencia,
+  una banda de fondo (dos datasets con `fill: '-1'`, sin necesidad de un plugin adicional).
+  Debajo de la gráfica hay una tabla con los mismos puntos, para quien prefiera los números.
+- **Chart.js se sirve localmente** (`backend/app/static/vendor/chart.umd.js`, ~200 KB,
+  instalado vía `npm install chart.js` y copiado al repo) en vez de cargarse desde un CDN
+  externo — se detectó durante el desarrollo que el entorno de verificación no tenía salida a
+  `cdn.jsdelivr.net`, y servirlo local es además más robusto para cualquier usuario detrás de
+  un firewall corporativo o sin conexión a ese CDN en particular.
+- **Interpretación de texto libre → número** (`app/trends.py`, funciones
+  `parse_numeric_value` y `parse_reference_range`): los campos `value` y `reference_range` son
+  texto libre tal como aparecen en la fuente original ("190 mg/dL", "0 – 200 (óptimo)",
+  "< 3.1 (51–60 años)"). El parser quita paréntesis antes de buscar un rango (para no confundir
+  un rango de edad entre paréntesis con el rango de referencia real) y entiende rangos
+  "abiertos" tipo "< 3.1" como `(0, 3.1)`. Cuando no puede interpretar algo, devuelve `None` y
+  ese punto no se grafica.
+- **Limitación conocida y documentada en el código:** el separador de miles en formato
+  latinoamericano (p. ej. "6.240" leucocitos) se interpreta igual que un separador decimal
+  ("6.24"). Correcto para casi todos los analitos de esta app (colesterol, glucosa,
+  creatinina, TSH...), pero subestima recuentos grandes (leucocitos, plaquetas). No se intentó
+  resolver la ambigüedad porque los datos de origen mezclan ambas convenciones sin manera
+  algorítmica confiable de distinguirlas — queda como mejora futura si se vuelve relevante.
 - Caso ya visible en los datos actuales: colesterol total bajando de 265 a 137 mg/dL entre
-  jun-2024 y ago-2026.
+  jun-2024 y ago-2026, con la banda de referencia (0–200, óptimo) de fondo.
 
-**Construido con:** Chart.js (vía CDN, sin backend adicional — consume `/api/events` que ya
-existe).
+**Pendiente dentro de esta fase:** filtro por rango de fechas (por ahora se grafica todo el
+historial disponible de la prueba elegida); unificar títulos equivalentes con nombres
+distintos (ej. "Creatinina (suero)" vs. "Creatinina sérica" no se agrupan automáticamente hoy).
+
+**Construido con:** Chart.js (servido localmente), `app/trends.py`, `routers/trends.py`,
+consume `/api/events` indirectamente vía `crud.list_events()` (no se tocó el modelo de datos).
 
 ---
 

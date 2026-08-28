@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Tendencias — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Tendencias en el tiempo</h1>
+  <p class="subtitle">
+    Elige una prueba para ver su evolución. Solo aparecen las que tienen al menos dos
+    registros con fecha exacta y valor numérico.
+  </p>
+
+  {% if not titles %}
+    <p>
+      Todavía no hay suficientes datos para graficar. A medida que agregues eventos —a mano,
+      o importando fotos en <a href="/importar">Importar foto</a>— las pruebas con al menos
+      dos registros con fecha van a aparecer aquí.
+    </p>
+  {% else %}
+    <form method="get" action="/tendencias" class="filters-inline">
+      <label for="titulo-select">Prueba</label>
+      <select id="titulo-select" name="titulo" onchange="this.form.submit()">
+        {% for t in titles %}
+          <option value="{{ t }}" {% if t == selected %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </form>
+
+    <div class="chart-card">
+      <canvas id="trend-chart" height="110" aria-label="Gráfica de tendencia" role="img"></canvas>
+      <p id="chart-band-note" class="hint" hidden>
+        La banda de fondo muestra el rango de referencia interpretado del registro más reciente.
+      </p>
+    </div>
+
+    <table class="table" id="chart-table">
+      <thead>
+        <tr><th>Fecha</th><th>Valor</th><th>Rango de referencia</th><th>Institución</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+  {% if selected %}
+    <script src="/static/vendor/chart.umd.js"></script>
+    <script>
+      async function cargarTendencia(titulo) {
+        const resp = await fetch(`/api/trends/${encodeURIComponent(titulo)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        dibujarGrafica(data);
+        llenarTabla(data.points);
+      }
+
+      function dibujarGrafica(data) {
+        const ctx = document.getElementById("trend-chart");
+        const labels = data.points.map((p) => p.date);
+        const datasets = [];
+
+        if (data.reference_range) {
+          const [lo, hi] = data.reference_range;
+          document.getElementById("chart-band-note").hidden = false;
+          datasets.push({
+            label: "__rango_min",
+            data: labels.map(() => lo),
+            borderWidth: 0,
+            pointRadius: 0,
+            fill: false,
+            order: 3,
+          });
+          datasets.push({
+            label: "__rango_max",
+            data: labels.map(() => hi),
+            borderWidth: 0,
+            pointRadius: 0,
+            backgroundColor: "rgba(31, 56, 100, 0.10)",
+            fill: "-1",
+            order: 2,
+          });
+        }
+
+        datasets.push({
+          label: "Valor",
+          data: data.points.map((p) => p.value),
+          borderColor: "#1f3864",
+          backgroundColor: "#1f3864",
+          tension: 0.25,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          order: 1,
+        });
+
+        new Chart(ctx, {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            interaction: { mode: "nearest", intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: (items) => items[0].label,
+                  label: (item) => {
+                    if (item.dataset.label !== "Valor") return null;
+                    const p = data.points[item.dataIndex];
+                    return p.raw_value + (p.institution ? " — " + p.institution : "");
+                  },
+                },
+              },
+            },
+            scales: {
+              y: { beginAtZero: false },
+            },
+          },
+        });
+      }
+
+      function llenarTabla(points) {
+        const tbody = document.querySelector("#chart-table tbody");
+        tbody.innerHTML = "";
+        points
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${p.date}</td>
+              <td>${p.raw_value ?? "—"}</td>
+              <td>${p.reference_range ?? "—"}</td>
+              <td>${p.institution ?? "—"}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+      }
+
+      cargarTendencia({{ selected|tojson }});
+    </script>
+  {% endif %}
+{% endblock %}
