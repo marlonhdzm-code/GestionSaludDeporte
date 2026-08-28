@@ -1,6 +1,10 @@
 # Arquitectura y hoja de ruta
 
-## Fase 0 (esta versión) — App personal en tu computador
+> Hoja de ruta visual (para compartir o revisar rápido): ver el artefacto
+> "Hoja de Ruta: Salud y Deporte" publicado en la conversación de Cowork.
+> Este archivo es la versión técnica de referencia, la que vive con el código.
+
+## Fase 0 — Fundación (completada, 28/08/2026)
 
 **Objetivo:** tener tus datos de salud organizados, editables y consultables, en una app que
 corre localmente, con una base de datos propia y una API sobre la cual se puede construir todo
@@ -26,7 +30,83 @@ lo demás.
   el motor de IA). Las rutas bajo `/`, `/eventos`, etc. renderizan HTML para que tú puedas usar
   la app directamente desde el navegador, sin depender de que exista un frontend aparte.
 
-## Fase 1 — Multiusuario y despliegue en la nube
+**Estado:** app funcional, precargada con tus 58 eventos reales, 5/5 pruebas pasando, repo git
+local inicializado.
+
+---
+
+## Fase 1 — Ingesta desde correo, documento o foto (siguiente, pedida por el usuario)
+
+**Objetivo:** que suministres un correo, un PDF o la foto de un examen, y la app extraiga los
+datos e incorpore el evento automáticamente, sin transcripción manual.
+
+**Flujo:**
+
+1. **Carga** — endpoint `/importar`: subir un PDF, una imagen (foto de un examen), o pegar el
+   texto de un correo.
+2. **Extracción de texto** — PDF digital: texto directo (`pdfplumber`); foto o PDF escaneado:
+   OCR (`pytesseract` u otro motor).
+3. **Estructuración con IA** — el texto crudo se envía a un modelo de lenguaje (API de Claude)
+   con un prompt que le pide identificar categoría FHIR, fecha, tipo de evento, valor, rango de
+   referencia e institución, devuelto en JSON conforme a `schemas.HealthEventCreate`.
+4. **Confirmación humana obligatoria** — el resultado se muestra en un formulario prellenado
+   junto al documento original; nada se guarda en la base de datos sin que el usuario lo
+   confirme o corrija. Esto es innegociable: un dato de salud mal transcrito es peor que no
+   tenerlo.
+
+**Construido con:** `pdfplumber`, `pytesseract`, API de Claude (Anthropic), nuevo endpoint
+`/importar` en `routers/`.
+
+**Riesgo a vigilar:** calidad de OCR en fotos de mala calidad — se mitiga mostrando siempre la
+imagen original junto al formulario de confirmación, nunca guardando a ciegas.
+
+---
+
+## Fase 2 — Tendencias en el tiempo (planeada, pedida por el usuario)
+
+**Objetivo:** ver la evolución de cualquier prueba (colesterol, glucosa, TSH...) como una
+gráfica en el tiempo, no como filas sueltas en una tabla.
+
+**Qué incluye:**
+
+- Vista "Tendencias": elegir un analito (por título de `HealthEvent`) y graficar su serie
+  temporal usando `event_date_sort`.
+- El `reference_range` de cada evento se dibuja como banda de fondo, para detectar de un
+  vistazo cuándo un valor cayó fuera de rango.
+- Filtro por categoría FHIR y por rango de fechas.
+- Caso ya visible en los datos actuales: colesterol total bajando de 265 a 137 mg/dL entre
+  jun-2024 y ago-2026.
+
+**Construido con:** Chart.js (vía CDN, sin backend adicional — consume `/api/events` que ya
+existe).
+
+---
+
+## Fase 3 — Resumen con IA: interpretación, recomendaciones y alertas (planeada, pedida por el usuario)
+
+**Objetivo:** un botón que le pide a la IA leer todo el historial del paciente y devolver un
+resumen en lenguaje claro — tendencias relevantes, valores a vigilar, preguntas sugeridas para
+el médico — siempre dejando explícito que no reemplaza una evaluación profesional.
+
+**Qué incluye:**
+
+- Botón "Generar resumen" → envía el historial (o un rango de fechas) a la API de Claude con
+  un prompt clínico diseñado para **describir y correlacionar, nunca diagnosticar ni
+  prescribir**.
+- Detecta valores fuera de `reference_range` y tendencias relevantes (por ejemplo, respuesta a
+  un cambio de medicación, visible cruzando `Observation` con `MedicationStatement`).
+- Sugiere preguntas concretas para la siguiente cita médica.
+- Cada resumen se guarda con fecha (tabla `AiSummary`, por definir) y se puede exportar a PDF.
+- **Todo resumen generado abre con un aviso fijo, no opcional:** "Esto fue generado por
+  inteligencia artificial, no soy médico y esto no reemplaza una evaluación profesional — te
+  sugiero compartir este resumen con tu médico tratante."
+
+**Construido con:** API de Claude, prompt clínico con guardrails explícitos, exportación a PDF
+(reutilizando el patrón ya usado para el registro de salud en Word/Excel).
+
+---
+
+## Fase 4 — Multiusuario y despliegue en la nube (planeada)
 
 Cuando el objetivo pase de "mi app personal" a "una app que otras personas puedan usar":
 
@@ -41,7 +121,9 @@ Cuando el objetivo pase de "mi app personal" a "una app que otras personas pueda
 5. **Frontend dedicado** (opcional, si la interfaz Jinja2 se queda corta): un frontend en React
    o similar que consuma la API `/api/...` ya existente, sin tocar el backend.
 
-## Fase 2 — Integración con instituciones médicas
+---
+
+## Fase 5 — Integración con instituciones médicas (planeada)
 
 - **Exportación/importación en formato FHIR real** (JSON conforme al estándar HL7 FHIR R4),
   para que una institución pueda enviar o recibir datos de forma estandarizada. Como
@@ -56,33 +138,22 @@ Cuando el objetivo pase de "mi app personal" a "una app que otras personas pueda
   HIPAA). Esto se debe evaluar con asesoría legal antes de manejar datos de terceros o de
   integrarse con una institución — no es un tema puramente técnico.
 
-## Fase 3 — Motor de IA: correlación, alertas y planes de salud
+---
 
-Una vez haya suficientes datos reales cargados (la razón por la que se decidió posponer esta
-fase):
+## Consideraciones transversales (aplican desde la Fase 1 en adelante)
 
-- **Correlación de tendencias**: por ejemplo, cruzar la serie temporal de `Observation`
-  (colesterol, glucosa, TSH...) con `MedicationStatement` (cuándo empezó cada medicamento) para
-  detectar respuesta a tratamiento — ya se ve un caso real en los datos cargados: el colesterol
-  total bajó de 265 a 137 mg/dL después de iniciar tratamiento con estatina.
-- **Alertas basadas en rangos de referencia**: cada `Observation` ya guarda su
-  `reference_range`; un motor de reglas simple (antes de pensar en un modelo de IA más
-  complejo) puede marcar valores fuera de rango y avisar.
-- **Planes de salud personalizados**: combinar el historial médico con las métricas
-  deportivas (fase de datos deportivos, ver más abajo) para sugerir ajustes — por ejemplo,
-  relacionar la carga de entrenamiento con marcadores cardiovasculares.
-- La arquitectura actual ya deja esto preparado: al ser todo `HealthEvent` con la misma forma,
-  un servicio de IA puede leer directamente de `/api/events?patient_id=...` sin necesitar
-  acceso especial a la base de datos.
+- **Privacidad**: documentos y fotos con datos de salud se procesan con el mismo cuidado ya
+  aplicado al correo — nada se comparte ni se guarda de terceros sin confirmación del usuario.
+- **Llave de API**: el acceso a la API de Claude (Fases 1 y 3) se maneja como variable de
+  entorno (`.env`, ya en `.gitignore`), nunca en el código ni en el repositorio.
+- **Pruebas continuas**: cada fase nueva llega con sus propias pruebas automáticas antes de
+  darse por terminada, igual que la Fase 0.
+- **La IA no diagnostica**: en la Fase 3, el prompt está diseñado para describir y sugerir,
+  nunca para emitir un diagnóstico o una prescripción.
 
-## Datos deportivos (pendiente)
+## Datos deportivos (pendiente, fuera de las fases numeradas)
 
-Este proyecto (fase 0) solo carga datos de salud extraídos del correo. Los datos deportivos
-mencionados en tu perfil (gimnasio, ciclismo, atletismo) no estaban en el correo y se pueden
-agregar de dos formas, sin cambiar la arquitectura:
-
-1. Manualmente, vía el formulario `/eventos/nuevo`, usando categorías FHIR ya existentes
-   (`Observation` sirve para métricas cuantitativas: distancia, frecuencia cardíaca, peso).
-2. Como una extensión futura: una tabla `SportSession` o categorías FHIR adicionales
-   (`Observation` con categoría "vital-signs" o "activity") si se conecta con datos de un reloj
-   deportivo o app de entrenamiento.
+Los datos deportivos mencionados en el perfil del usuario (gimnasio, ciclismo, atletismo) no
+estaban en el correo y se pueden agregar sin cambiar la arquitectura: manualmente vía
+`/eventos/nuevo`, o como extensión futura (categorías FHIR adicionales tipo `Observation` con
+categoría "activity", o integración con un reloj deportivo/app de entrenamiento).
