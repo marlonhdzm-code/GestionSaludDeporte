@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Importar — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Importar desde una foto</h1>
+  <p class="subtitle">
+    Sube la foto de un resultado, una orden médica o un carné de vacunación. La IA va a leer
+    el contenido y te va a mostrar lo que detectó para que lo confirmes o corrijas — nada se
+    guarda automáticamente.
+  </p>
+
+  {% if not ai_configured %}
+    <div class="notice">
+      <strong>Falta configurar el acceso a la IA.</strong>
+      Copia <code>.env.example</code> a <code>.env</code> en la raíz del proyecto y pega ahí tu
+      llave de <code>ANTHROPIC_API_KEY</code> (la consigues en
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>).
+      Luego reinicia la app.
+    </div>
+  {% else %}
+    <form method="post" action="/importar/analizar" enctype="multipart/form-data" class="form">
+      <label>Foto del documento
+        <input type="file" name="foto" accept="image/*" capture="environment" required>
+      </label>
+      <button type="submit">Analizar con IA</button>
+    </form>
+    <p class="hint">Formatos soportados: JPEG, PNG, WEBP, GIF. Máximo 15 MB.</p>
+  {% endif %}
+{% endblock %}

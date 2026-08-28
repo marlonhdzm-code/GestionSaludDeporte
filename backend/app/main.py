@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
-from .routers import events, pages, patients
+from .routers import events, ingest, pages, patients
 
 # Crea las tablas si no existen (para SQLite/desarrollo; en producción usar
 # migraciones con Alembic — ver docs/ARQUITECTURA.md).
@@ -34,3 +34,4 @@ app.mount(
 app.include_router(patients.router)
 app.include_router(events.router)
 app.include_router(pages.router)
+app.include_router(ingest.router)

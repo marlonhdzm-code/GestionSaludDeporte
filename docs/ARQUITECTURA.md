@@ -30,35 +30,52 @@ lo demás.
   el motor de IA). Las rutas bajo `/`, `/eventos`, etc. renderizan HTML para que tú puedas usar
   la app directamente desde el navegador, sin depender de que exista un frontend aparte.
 
-**Estado:** app funcional, precargada con tus 58 eventos reales, 5/5 pruebas pasando, repo git
-local inicializado.
+**Estado:** app funcional, precargada con tus 58 eventos reales, repo git local inicializado.
 
 ---
 
-## Fase 1 — Ingesta desde correo, documento o foto (siguiente, pedida por el usuario)
+## Fase 1 — Ingesta desde foto (primera versión lista, 28/08/2026)
 
-**Objetivo:** que suministres un correo, un PDF o la foto de un examen, y la app extraiga los
-datos e incorpore el evento automáticamente, sin transcripción manual.
+**Objetivo:** que suministres la foto de un examen o documento, y la app extraiga los datos e
+incorpore el evento — sin transcripción manual y sin guardar nada sin tu confirmación.
 
-**Flujo:**
+**Decisión técnica — visión de Claude en vez de OCR tradicional:** el plan original
+contemplaba `pytesseract` (OCR) + un paso separado de estructuración con IA. Se simplificó a
+un solo paso: la foto se manda directamente a un modelo de Claude con capacidad de visión, que
+lee el contenido y devuelve el JSON estructurado en una sola llamada. Esto evita depender de
+instalar el motor de Tesseract por separado en Windows, y en la práctica es más preciso para
+letra de laboratorio y sellos.
 
-1. **Carga** — endpoint `/importar`: subir un PDF, una imagen (foto de un examen), o pegar el
-   texto de un correo.
-2. **Extracción de texto** — PDF digital: texto directo (`pdfplumber`); foto o PDF escaneado:
-   OCR (`pytesseract` u otro motor).
-3. **Estructuración con IA** — el texto crudo se envía a un modelo de lenguaje (API de Claude)
-   con un prompt que le pide identificar categoría FHIR, fecha, tipo de evento, valor, rango de
-   referencia e institución, devuelto en JSON conforme a `schemas.HealthEventCreate`.
-4. **Confirmación humana obligatoria** — el resultado se muestra en un formulario prellenado
-   junto al documento original; nada se guarda en la base de datos sin que el usuario lo
-   confirme o corrija. Esto es innegociable: un dato de salud mal transcrito es peor que no
-   tenerlo.
+**Flujo implementado:**
 
-**Construido con:** `pdfplumber`, `pytesseract`, API de Claude (Anthropic), nuevo endpoint
-`/importar` en `routers/`.
+1. **`GET /importar`** — formulario para subir una foto (JPEG/PNG/WEBP/GIF, máx. 15 MB). Si no
+   hay una `ANTHROPIC_API_KEY` configurada, muestra instrucciones en vez del formulario.
+2. **`POST /importar/analizar`** (`routers/ingest.py`) — recibe la imagen, llama a
+   `ai_extract.extract_health_event_from_image()`, y renderiza `confirmar_evento.html` con la
+   imagen y un formulario prellenado con lo que la IA detectó (categoría FHIR, fecha, título,
+   valor, rango de referencia, institución). Si la IA no está segura de algo, lo dice en un
+   aviso visible (`notes_for_user`).
+3. **Confirmación humana obligatoria** — el formulario de confirmación postea al mismo
+   endpoint que ya existía, `POST /eventos/nuevo`; no hay una ruta de guardado "directo" desde
+   la IA. El campo "Fuente" queda prellenado como *"Foto analizada con IA — confirmado por el
+   paciente"*, editable.
 
-**Riesgo a vigilar:** calidad de OCR en fotos de mala calidad — se mitiga mostrando siempre la
-imagen original junto al formulario de confirmación, nunca guardando a ciegas.
+**Configuración:** `ANTHROPIC_API_KEY` (y opcionalmente `ANTHROPIC_MODEL`) se leen de un
+archivo `.env` en la raíz del proyecto (ver `.env.example`), cargado por `app/config.py` con
+`python-dotenv`. `.env` está en `.gitignore` — la llave nunca se sube al repositorio ni se le
+pasa a nadie más.
+
+**Pendiente dentro de esta fase:** soporte para PDF digital (texto ya seleccionable, como los
+informes que ya llegan por correo) — se puede sumar como una segunda entrada al mismo
+`ai_extract.py` (extraer texto con `pdfplumber` y mandarlo como texto en vez de imagen), sin
+cambiar el flujo de confirmación.
+
+**Construido con:** API de Claude (paquete `anthropic`), `python-dotenv`, nuevo router
+`routers/ingest.py`, plantillas `importar.html` y `confirmar_evento.html`.
+
+**Riesgo a vigilar:** calidad de la foto (letra borrosa, mala luz) — se mitiga mostrando
+siempre la imagen original junto al formulario de confirmación, nunca guardando a ciegas, y
+con el aviso `notes_for_user` cuando la IA no está segura de un campo.
 
 ---
 
@@ -92,7 +109,7 @@ el médico — siempre dejando explícito que no reemplaza una evaluación profe
 
 - Botón "Generar resumen" → envía el historial (o un rango de fechas) a la API de Claude con
   un prompt clínico diseñado para **describir y correlacionar, nunca diagnosticar ni
-  prescribir**.
+  prescribir**. Puede reutilizar el mismo cliente/config de `ai_extract.py` (Fase 1).
 - Detecta valores fuera de `reference_range` y tendencias relevantes (por ejemplo, respuesta a
   un cambio de medicación, visible cruzando `Observation` con `MedicationStatement`).
 - Sugiere preguntas concretas para la siguiente cita médica.
@@ -131,7 +148,8 @@ Cuando el objetivo pase de "mi app personal" a "una app que otras personas pueda
   campos, no un rediseño.
 - **Trazabilidad y consentimiento**: quién cargó cada dato, cuándo, con qué nivel de
   verificación (autorreportado por el paciente vs. confirmado por un profesional/institución)
-  — esto ya existe parcialmente en el campo `source` de cada evento.
+  — esto ya existe parcialmente en el campo `source` de cada evento (la Fase 1 ya distingue
+  "Foto analizada con IA — confirmado por el paciente" como fuente).
 - **Cumplimiento normativo**: dependiendo del país y de si se maneja información de terceros,
   esta fase implica revisar requisitos de protección de datos de salud (en Colombia, la Ley
   1581 de 2012 y normas de habeas data; si se maneja información de pacientes de EE.UU.,
@@ -144,16 +162,22 @@ Cuando el objetivo pase de "mi app personal" a "una app que otras personas pueda
 
 - **Privacidad**: documentos y fotos con datos de salud se procesan con el mismo cuidado ya
   aplicado al correo — nada se comparte ni se guarda de terceros sin confirmación del usuario.
+  La imagen subida en la Fase 1 se envía a la API de Claude para su análisis y no se guarda en
+  el servidor más allá de la sesión de confirmación.
 - **Llave de API**: el acceso a la API de Claude (Fases 1 y 3) se maneja como variable de
-  entorno (`.env`, ya en `.gitignore`), nunca en el código ni en el repositorio.
+  entorno (`.env`, ya en `.gitignore`), nunca en el código ni en el repositorio. Implementado
+  en `app/config.py` desde la Fase 1.
 - **Pruebas continuas**: cada fase nueva llega con sus propias pruebas automáticas antes de
-  darse por terminada, igual que la Fase 0.
+  darse por terminada. La Fase 1 agregó pruebas que simulan la extracción de la IA
+  (`monkeypatch`) para no depender de la red ni de una llave real al correr `pytest`.
 - **La IA no diagnostica**: en la Fase 3, el prompt está diseñado para describir y sugerir,
-  nunca para emitir un diagnóstico o una prescripción.
+  nunca para emitir un diagnóstico o una prescripción. El prompt de la Fase 1 ya sigue el mismo
+  principio: solo transcribe lo que ve, nunca interpreta ni completa valores no visibles.
 
 ## Datos deportivos (pendiente, fuera de las fases numeradas)
 
 Los datos deportivos mencionados en el perfil del usuario (gimnasio, ciclismo, atletismo) no
 estaban en el correo y se pueden agregar sin cambiar la arquitectura: manualmente vía
-`/eventos/nuevo`, o como extensión futura (categorías FHIR adicionales tipo `Observation` con
+`/eventos/nuevo`, por foto vía `/importar` (Fase 1, ya funcional para cualquier tipo de
+documento), o como extensión futura (categorías FHIR adicionales tipo `Observation` con
 categoría "activity", o integración con un reloj deportivo/app de entrenamiento).

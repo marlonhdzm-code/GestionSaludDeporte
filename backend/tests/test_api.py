@@ -114,3 +114,49 @@ def test_dashboard_page_loads():
 def test_eventos_page_loads():
     resp = client.get("/eventos")
     assert resp.status_code == 200
+
+
+def test_importar_page_loads():
+    resp = client.get("/importar")
+    assert resp.status_code == 200
+
+
+def test_importar_analizar_shows_friendly_error_without_api_key(monkeypatch):
+    """Sin ANTHROPIC_API_KEY configurada, el flujo no debe romperse — debe
+    mostrar el mensaje de error dentro de la página de confirmación."""
+    monkeypatch.setattr("app.config.AI_CONFIGURED", False)
+    resp = client.post(
+        "/importar/analizar",
+        files={"foto": ("test.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes", "image/jpeg")},
+    )
+    assert resp.status_code == 200
+    assert "No se pudo analizar" in resp.text
+
+
+def test_importar_analizar_prefills_confirmation_form(monkeypatch):
+    """Con la extracción simulada (sin llamar a la API real), la página de
+    confirmación debe traer los campos ya prellenados."""
+
+    def fake_extract(image_bytes, media_type):
+        return {
+            "resource_type": "Observation",
+            "event_date_text": "15/03/2026",
+            "event_date_sort": "2026-03-15",
+            "title": "Glucosa en ayunas",
+            "detail": "",
+            "value": "92 mg/dL",
+            "reference_range": "60 - 100",
+            "institution": "Laboratorio Clínico",
+            "notes_for_user": "",
+        }
+
+    monkeypatch.setattr("app.routers.ingest.extract_health_event_from_image", fake_extract)
+
+    resp = client.post(
+        "/importar/analizar",
+        files={"foto": ("test.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes", "image/jpeg")},
+    )
+    assert resp.status_code == 200
+    assert "Glucosa en ayunas" in resp.text
+    assert "92 mg/dL" in resp.text
+    assert 'action="/eventos/nuevo"' in resp.text

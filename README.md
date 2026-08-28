@@ -35,6 +35,21 @@ categoría FHIR, una vista de todos los eventos (filtrable), y un formulario par
 eventos nuevos a mano. La documentación interactiva de la API está en
 `http://127.0.0.1:8000/docs`.
 
+## Importar una foto con IA (Fase 1)
+
+La opción "Importar foto" del menú te deja subir la foto de un resultado, una orden médica o
+un carné de vacunación — la IA lee el contenido y te muestra un formulario prellenado para
+que lo confirmes antes de guardar (nada se guarda solo).
+
+Para activarla necesitas tu propia llave de la API de Anthropic:
+
+1. Consigue una llave en [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+2. Copia `.env.example` a un archivo nuevo llamado `.env` (en la raíz del proyecto).
+3. Abre `.env` y pega tu llave en `ANTHROPIC_API_KEY=`.
+4. Reinicia la app (`run_windows.bat` de nuevo, o `Ctrl+C` y volver a correr `uvicorn`).
+
+El archivo `.env` está en `.gitignore` — tu llave nunca se sube al repositorio.
+
 ## Correr las pruebas
 
 ```bash
@@ -54,6 +69,8 @@ GestionSaludDeporte/
 │   │   ├── schemas.py        # validación de datos de entrada/salida (Pydantic)
 │   │   ├── crud.py           # funciones de acceso a datos
 │   │   ├── seed.py           # carga tu registro de salud inicial
+│   │   ├── ai_extract.py     # lee una foto con Claude y la estructura en HealthEvent
+│   │   ├── config.py         # lee ANTHROPIC_API_KEY y demás variables de entorno
 │   │   ├── routers/          # rutas de la API JSON y de las páginas web
 │   │   ├── templates/        # páginas HTML (Jinja2)
 │   │   └── static/           # CSS
@@ -61,6 +78,7 @@ GestionSaludDeporte/
 ├── docs/
 │   └── ARQUITECTURA.md       # decisiones de diseño y hoja de ruta hacia IA/multiusuario
 ├── requirements.txt
+├── .env.example               # plantilla — copiar a .env y pegar tu llave ahí
 └── run_windows.bat
 ```
 

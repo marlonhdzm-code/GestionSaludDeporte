@@ -1,5 +1,11 @@
 @echo off
 REM Arranca la app en Windows. Doble clic o ejecutar desde la carpeta del proyecto.
+
+if not exist "%~dp0.env" (
+    echo Creando .env a partir de .env.example (falta pegar tu llave de Anthropic si quieres usar "Importar foto")...
+    copy "%~dp0.env.example" "%~dp0.env" >nul
+)
+
 cd /d "%~dp0backend"
 
 if not exist ".venv" (

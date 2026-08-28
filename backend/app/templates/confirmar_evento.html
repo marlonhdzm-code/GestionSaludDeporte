@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Confirmar evento — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Confirma lo que la IA detectó</h1>
+  <p class="subtitle">Revisa cada campo contra la foto original antes de guardar. Corrige lo que haga falta.</p>
+
+  <div class="review-layout">
+    <div class="review-image">
+      <img src="{{ image_data_uri }}" alt="Foto del documento subido">
+    </div>
+
+    <div class="review-form">
+      {% if error %}
+        <div class="notice notice-error">
+          <strong>No se pudo analizar la imagen.</strong> {{ error }}
+        </div>
+        <p><a href="/importar">&larr; Intentar de nuevo</a></p>
+      {% else %}
+        {% if extracted.notes_for_user %}
+          <div class="notice">
+            <strong>Aviso de la IA:</strong> {{ extracted.notes_for_user }}
+          </div>
+        {% endif %}
+
+        <form method="post" action="/eventos/nuevo" class="form">
+          <label>Categoría (FHIR)
+            <select name="resource_type" required>
+              {% for key, label in labels.items() %}
+                <option value="{{ key }}" {% if key == extracted.resource_type %}selected{% endif %}>
+                  {{ label }} ({{ key }})
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>Fecha (como texto)
+            <input type="text" name="event_date_text" required value="{{ extracted.event_date_text }}">
+          </label>
+
+          <label>Fecha exacta (opcional, para ordenar y graficar)
+            <input type="date" name="event_date_sort" value="{{ extracted.event_date_sort }}">
+          </label>
+
+          <label>Título / tipo de evento
+            <input type="text" name="title" required value="{{ extracted.title }}">
+          </label>
+
+          <label>Detalle
+            <textarea name="detail" rows="3">{{ extracted.detail }}</textarea>
+          </label>
+
+          <label>Valor / resultado
+            <input type="text" name="value" value="{{ extracted.value }}">
+          </label>
+
+          <label>Rango de referencia
+            <input type="text" name="reference_range" value="{{ extracted.reference_range }}">
+          </label>
+
+          <label>Institución / profesional
+            <input type="text" name="institution" value="{{ extracted.institution }}">
+          </label>
+
+          <label>Fuente
+            <input type="text" name="source" value="Foto analizada con IA — confirmado por el paciente">
+          </label>
+
+          <button type="submit">Confirmar y guardar</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
