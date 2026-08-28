@@ -11,3 +11,4 @@ env/
 .DS_Store
 Thumbs.db
 node_modules/
+*.db-journal
