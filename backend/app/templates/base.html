@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Gestión Salud y Deporte{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Gestión Salud y Deporte</a>
+    <nav>
+      <a href="/">Panel</a>
+      <a href="/eventos">Eventos</a>
+      <a href="/eventos/nuevo">+ Nuevo evento</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <p>Datos organizados bajo categorías del estándar HL7 FHIR — uso personal, no reemplaza el criterio médico.</p>
+  </footer>
+</body>
+</html>

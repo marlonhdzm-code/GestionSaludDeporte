@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Panel — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  {% if not patient %}
+    <div class="empty-state">
+      <h1>Aún no hay datos cargados</h1>
+      <p>Corre <code>python -m app.seed</code> para cargar tu registro de salud inicial, o agrega un
+      <a href="/eventos/nuevo">nuevo evento</a> manualmente.</p>
+    </div>
+  {% else %}
+    <h1>Hola, {{ patient.full_name.split(" ")[0] }}</h1>
+    <p class="subtitle">{{ patient.city or "" }} · {{ patient.insurer or "" }} · {{ patient.eps or "" }}</p>
+
+    <section class="cards">
+      {% for key, label in labels.items() %}
+        <a class="card" href="/eventos?categoria={{ key }}">
+          <span class="card-count">{{ counts.get(key, 0) }}</span>
+          <span class="card-label">{{ label }}</span>
+        </a>
+      {% endfor %}
+    </section>
+
+    <section>
+      <h2>Últimos eventos registrados</h2>
+      {% if recent %}
+        <table class="table">
+          <thead>
+            <tr><th>Fecha</th><th>Categoría</th><th>Evento</th><th>Valor</th></tr>
+          </thead>
+          <tbody>
+            {% for e in recent %}
+              <tr>
+                <td>{{ e.event_date_text }}</td>
+                <td><span class="tag">{{ labels.get(e.resource_type.value, e.resource_type.value) }}</span></td>
+                <td>{{ e.title }}</td>
+                <td>{{ e.value or "—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>No hay eventos todavía.</p>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endblock %}

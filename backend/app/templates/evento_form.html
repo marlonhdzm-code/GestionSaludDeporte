@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Nuevo evento — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Registrar nuevo evento</h1>
+  <form method="post" action="/eventos/nuevo" class="form">
+    <label>Categoría (FHIR)
+      <select name="resource_type" required>
+        {% for key, label in labels.items() %}
+          <option value="{{ key }}">{{ label }} ({{ key }})</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Fecha (como texto, ej. 28/08/2026 o "jun-2024")
+      <input type="text" name="event_date_text" required>
+    </label>
+
+    <label>Fecha exacta (opcional, para ordenar y graficar)
+      <input type="date" name="event_date_sort">
+    </label>
+
+    <label>Título / tipo de evento
+      <input type="text" name="title" required placeholder="Ej. Colesterol LDL, Consulta de cardiología...">
+    </label>
+
+    <label>Detalle
+      <textarea name="detail" rows="3"></textarea>
+    </label>
+
+    <label>Valor / resultado
+      <input type="text" name="value">
+    </label>
+
+    <label>Rango de referencia
+      <input type="text" name="reference_range">
+    </label>
+
+    <label>Institución / profesional
+      <input type="text" name="institution">
+    </label>
+
+    <label>Fuente
+      <input type="text" name="source">
+    </label>
+
+    <button type="submit">Guardar evento</button>
+  </form>
+{% endblock %}

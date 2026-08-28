@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Eventos — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Eventos</h1>
+
+  <div class="filters">
+    <a class="chip {% if not categoria_activa %}chip-active{% endif %}" href="/eventos">Todos</a>
+    {% for key, label in labels.items() %}
+      <a class="chip {% if categoria_activa == key %}chip-active{% endif %}" href="/eventos?categoria={{ key }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if events %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Categoría</th><th>Evento</th><th>Detalle</th>
+          <th>Valor</th><th>Rango de referencia</th><th>Institución</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+          <tr>
+            <td>{{ e.event_date_text }}</td>
+            <td><span class="tag">{{ labels.get(e.resource_type.value, e.resource_type.value) }}</span></td>
+            <td>{{ e.title }}</td>
+            <td>{{ e.detail or "—" }}</td>
+            <td>{{ e.value or "—" }}</td>
+            <td>{{ e.reference_range or "—" }}</td>
+            <td>{{ e.institution or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No hay eventos en esta categoría.</p>
+  {% endif %}
+{% endblock %}
