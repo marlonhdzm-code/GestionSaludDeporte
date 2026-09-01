@@ -44,9 +44,18 @@ Instrucciones importantes:
 baja, o cambia de patrón en un período específico?
 - CRUZA datos de distintas categorías cuando tenga sentido clínico o deportivo: por ejemplo, una \
 caída de HRV junto con una subida de frecuencia cardíaca en reposo y una carga de entrenamiento \
-que se mantiene alta puede sugerir sobreentrenamiento; una caída brusca y sostenida de horas de \
-entrenamiento sin explicación puede sugerir una lesión; un marcador de laboratorio que empeora \
+que se mantiene alta puede sugerir sobreentrenamiento; un marcador de laboratorio que empeora \
 progresivamente merece mención aunque cada valor individual esté cerca del rango normal.
+- Presta atención especial a caídas de horas de entrenamiento semanal de 1-3 meses de duración, \
+incluso si son breves y se recuperan después -- revisa TODO el historial de horas de \
+entrenamiento mes a mes, no solo los últimos meses. Cuando encuentres una, distíngue el patrón \
+según cómo se comportan HRV y frecuencia cardíaca en reposo en esos mismos meses: (a) si HRV cae \
+y/o la frecuencia cardíaca en reposo sube junto con la caída de horas, es más consistente con \
+sobreentrenamiento/fatiga sistémica; (b) si HRV y frecuencia cardíaca en reposo se mantienen \
+normales o estables mientras las horas de entrenamiento caen de forma aislada y localizada, es \
+más consistente con una lesión o molestia física puntual (ej. sobreuso de una articulación) que \
+impide entrenar con normalidad pero no afecta la recuperación fisiológica general -- repórtalo \
+como tal, mencionando que el patrón de recuperación normal descarta fatiga sistémica.
 - Cada hallazgo debe venir con evidencia concreta: qué datos (con fecha y valor) lo sustentan.
 - No inventes datos que no estén en el historial. Si algo no se puede determinar con los datos \
 disponibles, no lo afirmes.
