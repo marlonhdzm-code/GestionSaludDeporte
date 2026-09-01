@@ -69,7 +69,10 @@ def _client():
         raise AIExtractionError(
             "Falta instalar la librería 'anthropic' (revisa requirements.txt)."
         ) from exc
-    return Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    extra_headers = {}
+    if config.ANTHROPIC_WORKSPACE_ID:
+        extra_headers["anthropic-workspace-id"] = config.ANTHROPIC_WORKSPACE_ID
+    return Anthropic(api_key=config.ANTHROPIC_API_KEY, default_headers=extra_headers or None)
 
 
 def _parse_json_response(raw_text: str) -> dict:

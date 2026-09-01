@@ -2,7 +2,7 @@
 REM Arranca la app en Windows. Doble clic o ejecutar desde la carpeta del proyecto.
 
 if not exist "%~dp0.env" (
-    echo Creando .env a partir de .env.example (falta pegar tu llave de Anthropic si quieres usar "Importar foto")...
+    echo Creando .env a partir de .env.example - pega tu llave de Anthropic ahi despues si quieres usar Importar foto...
     copy "%~dp0.env.example" "%~dp0.env" >nul
 )
 
@@ -21,9 +21,15 @@ pip install -q -r ..\requirements.txt
 if not exist "salud_deporte.db" (
     echo Cargando datos iniciales...
     python -m app.seed
+    echo Cargando paciente de prueba ^(Greg Welch^) para seguir desarrollando la app...
+    python -m app.seed_greg
 )
 
 echo.
 echo Abriendo en http://127.0.0.1:8000
 start http://127.0.0.1:8000
 uvicorn app.main:app --reload
+
+echo.
+echo Si ves un error arriba, esta ventana no se va a cerrar sola. Cierrala tu cuando termines de leerlo.
+pause
