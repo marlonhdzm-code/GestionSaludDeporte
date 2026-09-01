@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}Resumen con IA — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Resumen con IA</h1>
+  <p class="subtitle">
+    {% if patient %}
+      Lee todo el historial de {{ patient.full_name.split(" ")[0] }} ({{ event_count }} registros) y
+      busca patrones y tendencias que, mirando los eventos uno por uno, son difíciles de notar.
+    {% else %}
+      Todavía no hay ningún paciente cargado.
+    {% endif %}
+  </p>
+
+  <div class="disclaimer">
+    <strong>Esto no es un diagnóstico médico.</strong> Es una lectura interpretativa generada por
+    IA a partir de tus propios datos, pensada para ayudarte a decidir qué vale la pena comentarle a
+    tu médico tratante — no reemplaza su criterio profesional. Ante cualquier síntoma o duda,
+    consulta directamente con un profesional de salud.
+  </div>
+
+  {% if not ai_configured %}
+    <div class="notice">
+      <strong>Falta configurar el acceso a la IA.</strong>
+      Copia <code>.env.example</code> a <code>.env</code> en la raíz del proyecto y pega ahí tu
+      llave de <code>ANTHROPIC_API_KEY</code> (la consigues en
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>).
+      Luego reinicia la app.
+    </div>
+  {% elif not patient %}
+    <div class="empty-state">
+      <p>Carga un paciente primero (<code>python -m app.seed</code> o un evento manual) para poder generar un resumen.</p>
+    </div>
+  {% else %}
+    <form method="post" action="/resumen/generar" class="form" id="resumen-form">
+      <button type="submit" id="generar-btn">{% if result %}Regenerar resumen{% else %}Generar resumen{% endif %}</button>
+    </form>
+    <p class="hint">
+      Esto envía tu historial completo a la API de Claude. Puede tardar bastante (a veces medio
+      minuto o más) — mientras esperas, abajo va a aparecer un cronómetro para que sepas que sigue
+      trabajando.
+    </p>
+
+    <div id="loading-panel" class="loading-panel" hidden>
+      <div class="loading-icons">
+        <span class="loading-icon icon-health" title="Analizando salud">
+          <svg viewBox="0 0 48 48" width="40" height="40">
+            <path d="M24 41 C 9 30, 3 19, 3 12 C 3 5, 9 1, 15 4 C 19 6, 22 9, 24 12 C 26 9, 29 6, 33 4 C 39 1, 45 5, 45 12 C 45 19, 39 30, 24 41 Z"
+                  fill="var(--light)" stroke="var(--navy)" stroke-width="2"/>
+            <polyline class="pulse-line" points="7,21 15,21 18,13 24,29 28,17 31,21 41,21"
+                      fill="none" stroke="#c0392b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="loading-icon icon-stopwatch" title="Cronómetro">
+          <svg viewBox="0 0 48 48" width="40" height="40">
+            <rect x="19" y="1" width="10" height="4" rx="1.5" fill="var(--navy)"/>
+            <line x1="24" y1="5" x2="24" y2="9" stroke="var(--navy)" stroke-width="2.5"/>
+            <circle cx="24" cy="27" r="18" fill="var(--light)" stroke="var(--navy)" stroke-width="2.5"/>
+            <line x1="24" y1="27" x2="24" y2="14" stroke="#c0392b" stroke-width="2.5" stroke-linecap="round">
+              <animateTransform attributeName="transform" type="rotate" from="0 24 27" to="360 24 27"
+                                 dur="2s" repeatCount="indefinite"/>
+            </line>
+            <circle cx="24" cy="27" r="2.2" fill="var(--navy)"/>
+          </svg>
+        </span>
+        <span class="loading-icon icon-runner" title="Datos deportivos">
+          <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="var(--navy)"
+               stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="31" cy="8" r="4" fill="var(--navy)" stroke="none"/>
+            <path d="M29 12 L19 23"/>
+            <path d="M25 15 L33 11"/>
+            <path d="M23 18 L13 21"/>
+            <path d="M19 23 L27 27 L25 38"/>
+            <path d="M19 23 L11 29 L7 39"/>
+          </svg>
+        </span>
+      </div>
+      <p class="loading-text">Generando resumen con IA… <span id="loading-timer">0s</span></p>
+      <p class="hint">No cierres ni recargues esta pestaña; la página va a cambiar sola cuando termine.</p>
+    </div>
+
+    {% if error %}
+      <div class="notice notice-error"><strong>No se pudo generar el resumen.</strong> {{ error }}</div>
+    {% endif %}
+
+    {% if result %}
+      <section class="summary-box">
+        <h2>Impresión general</h2>
+        <p>{{ result.resumen_general }}</p>
+      </section>
+
+      <section>
+        <h2>Hallazgos ({{ result.hallazgos|length }})</h2>
+        {% if result.hallazgos %}
+          <p class="hint">Haz clic en cualquier hallazgo para ver el detalle{% if result.hallazgos|selectattr("chart")|list %} y su gráfica{% endif %}.</p>
+          {% for h in result.hallazgos %}
+            <details class="finding-card nivel-{{ h.nivel }}">
+              <summary class="finding-summary">
+                <span class="finding-level nivel-{{ h.nivel }}">{{ h.nivel }}</span>
+                <span class="finding-title-text">{{ h.titulo }}</span>
+                <span class="finding-summary-chevron">›</span>
+              </summary>
+              <div class="finding-body">
+                <p class="finding-category">{{ h.categoria }}</p>
+                <p>{{ h.detalle }}</p>
+                {% if h.evidencia %}
+                  <div class="finding-evidence"><strong>Evidencia:</strong> {{ h.evidencia }}</div>
+                {% endif %}
+                {% if h.chart %}
+                  <div class="finding-chart-wrap">
+                    <canvas height="90" data-chart='{{ h.chart|tojson }}'></canvas>
+                  </div>
+                {% endif %}
+              </div>
+            </details>
+          {% endfor %}
+        {% else %}
+          <p class="hint">No se detectaron patrones que ameriten mención — el historial se ve dentro de lo esperado.</p>
+        {% endif %}
+      </section>
+
+      {% if result.sugerencias %}
+        <section class="summary-box">
+          <h2>Sugerencias generales</h2>
+          <ul>
+            {% for s in result.sugerencias %}
+              <li>{{ s }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+
+      {% if result.temas_para_el_medico %}
+        <section class="summary-box">
+          <h2>Temas para comentarle a tu médico</h2>
+          <ul>
+            {% for t in result.temas_para_el_medico %}
+              <li>{{ t }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+  var form = document.getElementById('resumen-form');
+  var panel = document.getElementById('loading-panel');
+  var timerEl = document.getElementById('loading-timer');
+  var btn = document.getElementById('generar-btn');
+  if (!form || !panel) return;
+  form.addEventListener('submit', function () {
+    btn.disabled = true;
+    btn.textContent = 'Generando…';
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    var seconds = 0;
+    timerEl.textContent = seconds + 's';
+    window.setInterval(function () {
+      seconds += 1;
+      timerEl.textContent = seconds + 's';
+    }, 1000);
+  });
+})();
+</script>
+{% if result and result.hallazgos %}
+  <script src="/static/vendor/chart.umd.js"></script>
+  <script>
+  (function () {
+    function dibujarMini(canvas, data) {
+      var labels = data.points.map(function (p) { return p.date; });
+      var datasets = [];
+
+      if (data.reference_range) {
+        var lo = data.reference_range[0];
+        var hi = data.reference_range[1];
+        datasets.push({
+          label: '__rango_min',
+          data: labels.map(function () { return lo; }),
+          borderWidth: 0, pointRadius: 0, fill: false, order: 3,
+        });
+        datasets.push({
+          label: '__rango_max',
+          data: labels.map(function () { return hi; }),
+          borderWidth: 0, pointRadius: 0,
+          backgroundColor: 'rgba(31, 56, 100, 0.10)', fill: '-1', order: 2,
+        });
+      }
+
+      datasets.push({
+        label: data.title,
+        data: data.points.map(function (p) { return p.value; }),
+        borderColor: '#1f3864',
+        backgroundColor: '#1f3864',
+        tension: 0.25,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        order: 1,
+      });
+
+      new Chart(canvas, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          interaction: { mode: 'nearest', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (item) {
+                  if (item.dataset.label !== data.title) return null;
+                  var p = data.points[item.dataIndex];
+                  return p.raw_value + (p.institution ? ' — ' + p.institution : '');
+                },
+              },
+            },
+          },
+          scales: { y: { beginAtZero: false } },
+        },
+      });
+    }
+
+    document.querySelectorAll('.finding-card').forEach(function (details) {
+      details.addEventListener('toggle', function () {
+        if (!details.open) return;
+        var canvas = details.querySelector('canvas[data-chart]');
+        if (!canvas || canvas.dataset.rendered) return;
+        canvas.dataset.rendered = '1';
+        var data = JSON.parse(canvas.dataset.chart);
+        dibujarMini(canvas, data);
+      });
+    });
+  })();
+  </script>
+{% endif %}
+{% endblock %}
