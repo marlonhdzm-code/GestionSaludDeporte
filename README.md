@@ -134,8 +134,9 @@ GestionSaludDeporte/
 ## Hoja de ruta
 
 Ver [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) para el detalle técnico y las siguientes
-fases: exportación FHIR real, multiusuario, y el motor de correlación con IA para alertas y
-planes de salud.
+fases: seguridad y autenticación real para multiusuario, ingesta por correo/reenvío (para que
+cualquier persona pueda cargar sus resultados solo reenviando el correo del laboratorio),
+exportación FHIR real, y el motor de correlación con IA para alertas y planes de salud.
 
 ## Aviso
 
