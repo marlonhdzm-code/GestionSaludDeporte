@@ -127,29 +127,77 @@ consume `/api/events` indirectamente vía `crud.list_events()` (no se tocó el m
 
 ---
 
-## Fase 3 — Resumen con IA: interpretación, recomendaciones y alertas (planeada, pedida por el usuario)
+## Fase 3 — Resumen con IA: interpretación, recomendaciones y alertas (primera versión lista, 01/09/2026)
 
 **Objetivo:** un botón que le pide a la IA leer todo el historial del paciente y devolver un
 resumen en lenguaje claro — tendencias relevantes, valores a vigilar, preguntas sugeridas para
 el médico — siempre dejando explícito que no reemplaza una evaluación profesional.
 
-**Qué incluye:**
+**Cómo quedó implementado:**
 
-- Botón "Generar resumen" → envía el historial (o un rango de fechas) a la API de Claude con
-  un prompt clínico diseñado para **describir y correlacionar, nunca diagnosticar ni
-  prescribir**. Puede reutilizar el mismo cliente/config de `ai_extract.py` (Fase 1).
-- Detecta valores fuera de `reference_range` y tendencias relevantes (por ejemplo, respuesta a
-  un cambio de medicación, visible cruzando `Observation` con `MedicationStatement`).
-- Sugiere preguntas concretas para la siguiente cita médica.
-- Cada resumen se guarda con fecha (tabla `AiSummary`, por definir) y se puede exportar a PDF.
-- **Todo resumen generado abre con un aviso fijo, no opcional:** "Esto fue generado por
-  inteligencia artificial, no soy médico y esto no reemplaza una evaluación profesional — te
-  sugiero compartir este resumen con tu médico tratante."
+- **`GET /resumen`** — muestra el formulario ("Generar resumen") con el conteo de eventos del
+  paciente activo, o instrucciones si falta configurar `ANTHROPIC_API_KEY`.
+- **`POST /resumen/generar`** (`routers/summary.py`) — llama a
+  `ai_summary.generate_health_summary(patient, events)`, que arma un prompt en español
+  (`ai_summary.PROMPT_INSTRUCTIONS`) pidiendo explícitamente **describir y correlacionar,
+  nunca diagnosticar ni prescribir**, con salida en JSON: `resumen_general`, `hallazgos[]`
+  (cada uno con `titulo`, `categoria`, `nivel` — importante/atención/informativo —, `detalle`,
+  `evidencia` y `marcador`), `sugerencias[]` y `temas_para_el_medico[]`. Reutiliza el mismo
+  patrón de cliente/config que `ai_extract.py` (Fase 1).
+- **Gráfica por hallazgo:** el campo `marcador` es el título exacto (tal como aparece en el
+  historial) del marcador/medición que mejor respalda ese hallazgo. `_build_chart()` /
+  `_attach_charts()` en `routers/summary.py` buscan esos eventos, arman los mismos puntos que
+  usa `/tendencias` (Fase 2) y los adjuntan al hallazgo para graficarlos con Chart.js — sin
+  volver a llamar a la IA para eso.
+- **UI de hallazgos:** cada hallazgo se muestra colapsado (título + nivel) y solo al hacer
+  click se expande el detalle, la evidencia y la gráfica (`<details>`/`<summary>` nativos, sin
+  JS de por medio para el toggle; el `Chart.js` de cada gráfica se dibuja de forma perezosa,
+  solo cuando el hallazgo se abre por primera vez).
+- **Indicador de carga:** como la respuesta de Claude puede tardar medio minuto o más, la
+  página muestra un panel con iconos (corazón con pulso, cronómetro girando via SVG
+  `animateTransform`, corredor con animación CSS) y un contador de segundos en vivo, para que
+  quede claro que la app sigue trabajando y no se congeló.
+- **Todo resumen generado muestra un aviso fijo, no opcional:** "Esto no es un diagnóstico
+  médico" — visible siempre en la página, generado el resumen o no.
 
-**Construido con:** API de Claude, prompt clínico con guardrails explícitos, exportación a PDF
-(reutilizando el patrón ya usado para el registro de salud en Word/Excel).
+**Construido con:** API de Claude (mismo cliente que Fase 1), `ai_summary.py`,
+`routers/summary.py`, `templates/resumen.html`, reutiliza `app/trends.py` (Fase 2) para
+interpretar valores numéricos y rangos de referencia al armar cada gráfica.
+
+**Pendiente dentro de esta fase:** guardar cada resumen generado con fecha (tabla
+`AiSummary`, por definir) para poder verlo después sin regenerarlo; exportar el resumen a PDF.
+
+**Cómo probarla objetivamente:** el paciente de prueba Greg Welch (ver más abajo) tiene 6
+condiciones sembradas deliberadamente en sus datos, sin ninguna etiqueta diagnóstica visible
+para la IA — la respuesta esperada está documentada aparte en
+[`ANOMALIAS_PRUEBA_GREG.md`](ANOMALIAS_PRUEBA_GREG.md), para comparar contra lo que la Fase 3
+detecta sin haberle dado la respuesta de antemano.
 
 ---
+
+## Selector de paciente activo (cookie) — implementado, 01/09/2026
+
+Paso intermedio entre "un solo paciente hardcodeado" (Fase 0) y multiusuario real
+(Fase 4): un `<select>` en el header (visible solo si hay más de un paciente cargado) deja
+elegir cuál está activo. La elección se guarda en la cookie `active_patient_id` y todas las
+páginas (`/`, `/eventos`, `/tendencias`, `/importar`, `/resumen`) leen el paciente activo de
+ahí, con `_current_patient()` en `routers/pages.py`. **No es autenticación** — cualquiera que
+use el navegador puede cambiar de paciente; sirve para separar tus datos reales del paciente
+de prueba mientras se desarrolla, y se reemplaza por login real en la Fase 4.
+
+## Paciente de prueba: Greg Welch — implementado, 01/09/2026
+
+Para poder seguir construyendo y probando funcionalidad (especialmente la Fase 3) sin usar
+datos reales, `backend/app/greg_data.py` genera 5 años (2021-2025) de historial sintético de
+un triatleta amateur de 40 años con hipotiroidismo: 10 paneles de laboratorio (14
+marcadores) y datos mensuales estilo Garmin (VO2max, FC en reposo, HRV, horas de
+entrenamiento, sueño, peso), cargados por `seed_greg.py` (idempotente, se salta si el
+paciente ya existe). Incluye 3 condiciones de salud y 3 condiciones deportivas sembradas
+deliberadamente en los patrones numéricos, sin ninguna etiqueta diagnóstica en los datos —
+pensadas como set de prueba ciego para la Fase 3. El detalle completo (valores exactos,
+fechas, qué se espera que la IA detecte) está en
+[`ANOMALIAS_PRUEBA_GREG.md`](ANOMALIAS_PRUEBA_GREG.md) — deliberadamente no se le da esa
+respuesta a la IA antes de evaluarla.
 
 ## Fase 4 — Multiusuario y despliegue en la nube (planeada)
 

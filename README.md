@@ -10,6 +10,10 @@ salud personalizados.
 Este repositorio es la primera fase: **la base de datos y la app web funcionando en tu
 computador**, cargada ya con tu registro de salud actual.
 
+La app soporta más de un paciente cargado a la vez (por ejemplo, tus datos reales y un
+paciente de prueba) — un selector en la parte superior deja elegir cuál está activo; la
+elección se recuerda en una cookie del navegador.
+
 ## Arranque rápido (Windows)
 
 1. Asegúrate de tener [Python 3.11+](https://www.python.org/downloads/) instalado (marca
@@ -59,6 +63,37 @@ interpretar del texto del registro. Chart.js va incluido localmente
 (`backend/app/static/vendor/`) — no depende de ningún servicio externo para dibujar la
 gráfica.
 
+## Paciente de prueba: Greg Welch (para seguir desarrollando)
+
+En una instalación nueva, además de tu registro real, la app carga un segundo paciente
+sintético: **Greg Welch**, un triatleta amateur de 40 años con 5 años (2021-2025) de
+historial de laboratorio (10 paneles, 14 marcadores) y datos mensuales estilo Garmin
+(VO2max, FC en reposo, HRV, horas de entrenamiento, sueño, peso). Sirve como set de datos
+realista para seguir construyendo funcionalidad sin tocar tu información real — se
+identifica en el selector de paciente como "(prueba)".
+
+Sus datos viven en `backend/app/greg_data.py` y se cargan con `python -m app.seed_greg`
+(ya incluido en `run_windows.bat` en una instalación nueva). El detalle de qué condiciones
+de salud y deportivas están sembradas deliberadamente en sus datos — para poner a prueba el
+resumen con IA de la Fase 3 — está en
+[`docs/ANOMALIAS_PRUEBA_GREG.md`](docs/ANOMALIAS_PRUEBA_GREG.md).
+
+## Resumen interpretativo con IA (Fase 3)
+
+La opción "Resumen IA" del menú envía todo el historial del paciente activo a la API de
+Claude y devuelve un análisis en español: una impresión general, una lista de hallazgos
+(cada uno con un nivel — importante / atención / informativo — y, cuando aplica, la gráfica
+del marcador que lo respalda), sugerencias generales, y temas concretos para comentarle al
+médico. Usa la misma `ANTHROPIC_API_KEY` que la importación por foto (Fase 1) — no requiere
+configuración adicional si ya la tienes activa.
+
+**Esto no es un diagnóstico médico** — es una lectura interpretativa de tus propios datos
+pensada para ayudarte a decidir qué vale la pena comentarle a tu médico tratante. El aviso
+aparece siempre, de forma fija, en la página.
+
+Mientras se genera el resumen (puede tardar medio minuto o más) se muestra un indicador de
+carga con un contador de segundos, para que quede claro que la app sigue trabajando.
+
 ## Correr las pruebas
 
 ```bash
@@ -79,14 +114,18 @@ GestionSaludDeporte/
 │   │   ├── crud.py           # funciones de acceso a datos
 │   │   ├── seed.py           # carga tu registro de salud inicial
 │   │   ├── ai_extract.py     # lee una foto con Claude y la estructura en HealthEvent
+│   │   ├── ai_summary.py     # arma el prompt y llama a Claude para el resumen interpretativo (Fase 3)
 │   │   ├── config.py         # lee ANTHROPIC_API_KEY y demás variables de entorno
 │   │   ├── trends.py         # interpreta "value"/"reference_range" como números para graficar
-│   │   ├── routers/          # rutas de la API JSON y de las páginas web
-│   │   ├── templates/        # páginas HTML (Jinja2)
+│   │   ├── greg_data.py      # datos sintéticos de 5 años del paciente de prueba Greg Welch
+│   │   ├── seed_greg.py      # carga a Greg Welch (idempotente)
+│   │   ├── routers/          # rutas de la API JSON y de las páginas web (incluye summary.py, Fase 3)
+│   │   ├── templates/        # páginas HTML (Jinja2, incluye resumen.html)
 │   │   └── static/           # CSS + Chart.js local (vendor/)
 │   └── tests/                # pruebas automáticas (pytest)
 ├── docs/
-│   └── ARQUITECTURA.md       # decisiones de diseño y hoja de ruta hacia IA/multiusuario
+│   ├── ARQUITECTURA.md              # decisiones de diseño y hoja de ruta hacia IA/multiusuario
+│   └── ANOMALIAS_PRUEBA_GREG.md     # clave de respuestas de las anomalías sembradas en Greg Welch
 ├── requirements.txt
 ├── .env.example               # plantilla — copiar a .env y pegar tu llave ahí
 └── run_windows.bat
