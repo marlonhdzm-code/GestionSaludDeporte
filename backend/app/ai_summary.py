@@ -176,7 +176,7 @@ def generate_health_summary(patient, events: list[HealthEvent]) -> dict:
     try:
         response = client.messages.create(
             model=config.ANTHROPIC_MODEL,
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=0,
             messages=[{"role": "user", "content": full_prompt}],
         )
@@ -184,6 +184,11 @@ def generate_health_summary(patient, events: list[HealthEvent]) -> dict:
         raise AISummaryError(f"No se pudo contactar a la API de Claude: {exc}") from exc
 
     raw_text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise AISummaryError(
+            "La respuesta de la IA se corto por exceder el limite de longitud configurado. "
+            "Intenta de nuevo -- si vuelve a pasar, es un limite que hay que subir en el codigo."
+        )
     data = _parse_json_response(raw_text)
 
     return {
