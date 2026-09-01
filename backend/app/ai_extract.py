@@ -203,14 +203,15 @@ def _normalize_extracted(data: dict) -> dict:
     }
 
 
-def extract_health_event_from_pdf(pdf_bytes: bytes) -> dict:
+def extract_health_event_from_pdf(pdf_bytes: bytes, password: str | None = None) -> dict:
     """
     Extrae el texto de un PDF digital (texto ya seleccionable, no escaneado) con
     pdfplumber, se lo manda a Claude con el mismo esquema de salida que la
     extracción por foto, y devuelve un diccionario con los campos de
     HealthEvent (sin patient_id) listos para prellenar el formulario de
     confirmación. Lanza AIExtractionError si algo falla, incluyendo el caso de
-    un PDF sin texto extraíble (probablemente escaneado como imágenes).
+    un PDF sin texto extraíble (probablemente escaneado como imágenes) o un PDF
+    protegido con contraseña (sin ella, o con una incorrecta).
     """
     if len(pdf_bytes) > 15 * 1024 * 1024:
         raise AIExtractionError("El PDF pesa más de 15 MB — intenta con un archivo más liviano.")
@@ -219,15 +220,32 @@ def extract_health_event_from_pdf(pdf_bytes: bytes) -> dict:
 
     try:
         import pdfplumber
+        from pdfminer.pdfdocument import PDFPasswordIncorrect
     except ImportError as exc:  # pragma: no cover
         raise AIExtractionError(
             "Falta instalar la librería 'pdfplumber' (revisa requirements.txt)."
         ) from exc
 
     try:
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        with pdfplumber.open(io.BytesIO(pdf_bytes), password=password or "") as pdf:
             page_texts = [page.extract_text() or "" for page in pdf.pages]
     except Exception as exc:
+        # pdfplumber envuelve el error real de pdfminer en sus propias excepciones
+        # (a veces sin mensaje de texto), así que hay que mirar la causa/los args
+        # para saber si específicamente es un problema de contraseña.
+        wraps_password_error = isinstance(exc, PDFPasswordIncorrect) or any(
+            isinstance(a, PDFPasswordIncorrect) for a in getattr(exc, "args", ())
+        )
+        if wraps_password_error:
+            if password:
+                raise AIExtractionError(
+                    "La contraseña que ingresaste no es correcta para este PDF. Verifícala "
+                    "e intenta de nuevo."
+                ) from exc
+            raise AIExtractionError(
+                "Este PDF está protegido con contraseña. Ingrésala en el campo de abajo "
+                "(junto al archivo) e intenta de nuevo."
+            ) from exc
         raise AIExtractionError(f"No se pudo leer el PDF: {exc}") from exc
 
     pdf_text = "\n".join(t for t in page_texts if t).strip()

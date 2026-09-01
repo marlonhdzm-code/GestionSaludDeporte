@@ -5,7 +5,7 @@ guardar. Nunca se guarda nada automáticamente sin esa confirmación.
 """
 import base64
 
-from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Request, UploadFile
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -33,7 +33,12 @@ def importar_form(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/analizar")
-async def importar_analizar(request: Request, documento: UploadFile, db: Session = Depends(get_db)):
+async def importar_analizar(
+    request: Request,
+    documento: UploadFile,
+    contrasena: str = Form(""),
+    db: Session = Depends(get_db),
+):
     patient = _current_patient(db, request)
     file_bytes = await documento.read()
     media_type = documento.content_type or "image/jpeg"
@@ -42,7 +47,7 @@ async def importar_analizar(request: Request, documento: UploadFile, db: Session
 
     try:
         if is_pdf:
-            extracted = extract_health_event_from_pdf(file_bytes)
+            extracted = extract_health_event_from_pdf(file_bytes, password=contrasena or None)
         else:
             extracted = extract_health_event_from_image(file_bytes, media_type)
         error = None
