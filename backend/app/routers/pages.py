@@ -23,15 +23,52 @@ RESOURCE_LABELS = {
     "Coverage": "Aseguramiento en salud",
 }
 
+ACTIVE_PATIENT_COOKIE = "active_patient_id"
 
-def _current_patient(db: Session) -> models.Patient | None:
+
+def _current_patient(db: Session, request: Request | None = None) -> models.Patient | None:
+    """Paciente activo.
+
+    La app todavía no tiene autenticación real (eso es la Fase 4,
+    multiusuario). Mientras tanto, esto es un selector liviano entre los
+    pacientes que existan en esta base de datos (por ejemplo, tus datos
+    reales y un paciente de prueba como Greg Welch), recordado en una
+    cookie. Si no hay cookie o no coincide con ningún paciente, se usa el
+    primero que exista.
+    """
     patients = crud.list_patients(db)
-    return patients[0] if patients else None
+    if not patients:
+        return None
+    if request is not None:
+        cookie_value = request.cookies.get(ACTIVE_PATIENT_COOKIE)
+        if cookie_value:
+            try:
+                cookie_id = int(cookie_value)
+            except ValueError:
+                cookie_id = None
+            if cookie_id is not None:
+                match = next((p for p in patients if p.id == cookie_id), None)
+                if match is not None:
+                    return match
+    return patients[0]
+
+
+def _selector_context(db: Session) -> dict:
+    """Contexto común para que base.html pueda mostrar el selector de paciente."""
+    return {"all_patients": crud.list_patients(db)}
+
+
+@router.post("/paciente/activar")
+def paciente_activar(request: Request, patient_id: int = Form(...)):
+    redirect_to = request.headers.get("referer", "/")
+    response = RedirectResponse(url=redirect_to, status_code=303)
+    response.set_cookie(ACTIVE_PATIENT_COOKIE, str(patient_id), max_age=60 * 60 * 24 * 365)
+    return response
 
 
 @router.get("/")
 def dashboard(request: Request, db: Session = Depends(get_db)):
-    patient = _current_patient(db)
+    patient = _current_patient(db, request)
     counts = crud.counts_by_category(db, patient.id) if patient else {}
     recent = crud.list_events(db, patient_id=patient.id)[-8:][::-1] if patient else []
     return templates.TemplateResponse(
@@ -42,13 +79,14 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "counts": counts,
             "labels": RESOURCE_LABELS,
             "recent": recent,
+            **_selector_context(db),
         },
     )
 
 
 @router.get("/eventos")
 def eventos(request: Request, categoria: str | None = None, db: Session = Depends(get_db)):
-    patient = _current_patient(db)
+    patient = _current_patient(db, request)
     resource_type = models.ResourceType(categoria) if categoria else None
     events = crud.list_events(db, patient_id=patient.id if patient else None, resource_type=resource_type)
     return templates.TemplateResponse(
@@ -59,17 +97,18 @@ def eventos(request: Request, categoria: str | None = None, db: Session = Depend
             "events": events,
             "labels": RESOURCE_LABELS,
             "categoria_activa": categoria,
+            **_selector_context(db),
         },
     )
 
 
 @router.get("/eventos/nuevo")
 def evento_nuevo_form(request: Request, db: Session = Depends(get_db)):
-    patient = _current_patient(db)
+    patient = _current_patient(db, request)
     return templates.TemplateResponse(
         request,
         "evento_form.html",
-        {"patient": patient, "labels": RESOURCE_LABELS},
+        {"patient": patient, "labels": RESOURCE_LABELS, **_selector_context(db)},
     )
 
 
@@ -87,7 +126,7 @@ def evento_nuevo_submit(
     source: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    patient = _current_patient(db)
+    patient = _current_patient(db, request)
     if patient is None:
         patient = crud.create_patient(db, schemas.PatientCreate(full_name="Paciente"))
 

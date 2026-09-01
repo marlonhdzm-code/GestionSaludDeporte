@@ -208,3 +208,21 @@ h1 { color: var(--navy); margin-bottom: 4px; }
 }
 
 footer { text-align: center; color: var(--grey); font-size: 0.8rem; padding: 20px; }
+
+.patient-switch {
+  margin-left: 16px;
+}
+
+.patient-switch select {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.9rem;
+}
+
+.patient-switch select option {
+  color: #1a1a1a;
+}
+

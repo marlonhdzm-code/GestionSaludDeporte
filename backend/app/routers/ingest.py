@@ -20,17 +20,21 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 
 
 @router.get("")
-def importar_form(request: Request):
+def importar_form(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "importar.html",
-        {"ai_configured": config.AI_CONFIGURED, "labels": RESOURCE_LABELS},
+        {
+            "ai_configured": config.AI_CONFIGURED,
+            "labels": RESOURCE_LABELS,
+            "all_patients": crud.list_patients(db),
+        },
     )
 
 
 @router.post("/analizar")
 async def importar_analizar(request: Request, foto: UploadFile, db: Session = Depends(get_db)):
-    patient = _current_patient(db)
+    patient = _current_patient(db, request)
     image_bytes = await foto.read()
     media_type = foto.content_type or "image/jpeg"
 
@@ -52,5 +56,6 @@ async def importar_analizar(request: Request, foto: UploadFile, db: Session = De
             "extracted": extracted,
             "error": error,
             "image_data_uri": image_data_uri,
+            "all_patients": crud.list_patients(db),
         },
     )

@@ -14,8 +14,20 @@
       <a href="/eventos">Eventos</a>
       <a href="/tendencias">Tendencias</a>
       <a href="/importar">Importar foto</a>
+      <a href="/resumen">Resumen IA</a>
       <a href="/eventos/nuevo">+ Nuevo evento</a>
     </nav>
+    {% if all_patients and all_patients|length > 1 %}
+    <form method="post" action="/paciente/activar" class="patient-switch" title="Cambiar de paciente">
+      <select name="patient_id" onchange="this.form.submit()">
+        {% for p in all_patients %}
+        <option value="{{ p.id }}" {% if patient and p.id == patient.id %}selected{% endif %}>
+          {{ p.full_name }}{% if p.document_id and 'TEST' in p.document_id %} (prueba){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
   </header>
   <main class="container">
     {% block content %}{% endblock %}

@@ -33,23 +33,28 @@ def _chartable_titles(db: Session, patient_id: int) -> list[str]:
 
 @router.get("/tendencias")
 def tendencias_page(request: Request, titulo: str | None = None, db: Session = Depends(get_db)):
-    patient = _current_patient(db)
+    patient = _current_patient(db, request)
     titles = _chartable_titles(db, patient.id) if patient else []
     selected = titulo if titulo in titles else (titles[0] if titles else None)
     return templates.TemplateResponse(
         request,
         "tendencias.html",
-        {"patient": patient, "titles": titles, "selected": selected},
+        {
+            "patient": patient,
+            "titles": titles,
+            "selected": selected,
+            "all_patients": crud.list_patients(db),
+        },
     )
 
 
 @router.get("/api/trends/{title}", include_in_schema=True)
-def trend_data(title: str, db: Session = Depends(get_db)):
-    """JSON consumido por Chart.js en /tendencias — no requiere patient_id
-    porque, igual que el resto de la interfaz web, esta app maneja un solo
-    paciente activo (ver _current_patient); en la Fase 4 (multiusuario) esto
-    pasa a filtrar por el usuario autenticado."""
-    patient = _current_patient(db)
+def trend_data(title: str, request: Request, db: Session = Depends(get_db)):
+    """JSON consumido por Chart.js en /tendencias. El paciente se toma del
+    selector (cookie), igual que el resto de la interfaz web (ver
+    `_current_patient`); en la Fase 4 (multiusuario real) esto pasa a
+    filtrar por el usuario autenticado."""
+    patient = _current_patient(db, request)
     if patient is None:
         raise HTTPException(status_code=404, detail="No hay ningún paciente cargado todavía")
 
