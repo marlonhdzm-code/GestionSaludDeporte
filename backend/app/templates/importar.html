@@ -22,11 +22,17 @@
       <label>Foto o PDF del documento
         <input type="file" name="documento" accept="image/*,application/pdf" required>
       </label>
+      <label>Contraseña del PDF (opcional)
+        <input type="password" name="contrasena" autocomplete="off"
+               placeholder="Solo si el PDF te la pide para abrirse">
+      </label>
       <button type="submit">Analizar con IA</button>
     </form>
     <p class="hint">
       Fotos: JPEG, PNG, WEBP, GIF. PDF: solo si el texto es seleccionable (no un escaneo — para
-      eso, sube una foto de la página en su lugar). Máximo 15 MB.
+      eso, sube una foto de la página en su lugar). Si el PDF pide contraseña para abrirse
+      (algunos laboratorios los protegen así), ponla en el campo de arriba — si no, la IA no
+      va a poder leerlo. Máximo 15 MB.
     </p>
   {% endif %}
 {% endblock %}

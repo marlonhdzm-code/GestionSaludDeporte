@@ -7,6 +7,8 @@ Correr con:
     pytest
 """
 import pytest
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -166,7 +168,7 @@ def test_importar_analizar_pdf_uses_pdf_extractor(monkeypatch):
     """Un archivo con content-type application/pdf debe pasar por el
     extractor de PDF, no por el de imagen, y prellenar el formulario igual."""
 
-    def fake_extract_pdf(pdf_bytes):
+    def fake_extract_pdf(pdf_bytes, password=None):
         return {
             "resource_type": "Observation",
             "event_date_text": "10/02/2026",
@@ -194,12 +196,75 @@ def test_importar_analizar_pdf_uses_pdf_extractor(monkeypatch):
     assert "PDF analizado con IA" in resp.text
 
 
+def test_importar_analizar_pdf_protegido_sin_contrasena_da_error_claro(monkeypatch):
+    """Un PDF con contraseña, sin dar la contraseña, debe avisar
+    específicamente que está protegido -- no un error críptico."""
+    monkeypatch.setattr("app.config.AI_CONFIGURED", True)
+    fixture_path = Path(__file__).resolve().parent / "fixtures" / "pdf_protegido.pdf"
+    pdf_bytes = fixture_path.read_bytes()
+
+    resp = client.post(
+        "/importar/analizar",
+        files={"documento": ("protegido.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert resp.status_code == 200
+    assert "protegido con contraseña" in resp.text
+
+
+def test_importar_analizar_pdf_protegido_contrasena_incorrecta(monkeypatch):
+    """Con una contraseña equivocada, el mensaje debe decir que la
+    contraseña no es correcta (no confundirlo con 'está protegido')."""
+    monkeypatch.setattr("app.config.AI_CONFIGURED", True)
+    fixture_path = Path(__file__).resolve().parent / "fixtures" / "pdf_protegido.pdf"
+    pdf_bytes = fixture_path.read_bytes()
+
+    resp = client.post(
+        "/importar/analizar",
+        files={"documento": ("protegido.pdf", pdf_bytes, "application/pdf")},
+        data={"contrasena": "clave-equivocada"},
+    )
+    assert resp.status_code == 200
+    assert "no es correcta" in resp.text
+
+
+def test_importar_analizar_pdf_protegido_contrasena_correcta(monkeypatch):
+    """Con la contraseña correcta, debe llegar hasta llamar a la IA (que
+    simulamos) y prellenar el formulario, igual que un PDF sin proteger."""
+    monkeypatch.setattr("app.config.AI_CONFIGURED", True)
+    fixture_path = Path(__file__).resolve().parent / "fixtures" / "pdf_protegido.pdf"
+    pdf_bytes = fixture_path.read_bytes()
+
+    def fake_extract_pdf(pdf_bytes, password=None):
+        assert password == "1234"
+        return {
+            "resource_type": "Observation",
+            "event_date_text": "10/02/2026",
+            "event_date_sort": "2026-02-10",
+            "title": "Hemoglobina",
+            "detail": "",
+            "value": "14.5 g/dL",
+            "reference_range": "13.5 - 17",
+            "institution": "Laboratorio de prueba",
+            "notes_for_user": "",
+        }
+
+    monkeypatch.setattr("app.routers.ingest.extract_health_event_from_pdf", fake_extract_pdf)
+
+    resp = client.post(
+        "/importar/analizar",
+        files={"documento": ("protegido.pdf", pdf_bytes, "application/pdf")},
+        data={"contrasena": "1234"},
+    )
+    assert resp.status_code == 200
+    assert "Hemoglobina" in resp.text
+
+
 def test_importar_analizar_pdf_without_text_shows_friendly_error(monkeypatch):
     """Un PDF sin texto extraíble (escaneado) debe dar un mensaje de error
     claro en vez de fallar feo."""
     monkeypatch.setattr("app.config.AI_CONFIGURED", True)
 
-    def fake_extract_pdf_scanned(pdf_bytes):
+    def fake_extract_pdf_scanned(pdf_bytes, password=None):
         from app.ai_extract import AIExtractionError
 
         raise AIExtractionError(
