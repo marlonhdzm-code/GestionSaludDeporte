@@ -97,6 +97,111 @@ def test_confirmar_pendiente_crea_evento_y_borra_pendiente(client):
         db.close()
 
 
+def test_reintentar_pdf_con_contrasena_correcta_actualiza_pendiente(client, monkeypatch):
+    import base64
+
+    patient = _crear_paciente_activo()
+    db = TestingSessionLocal()
+    try:
+        pendiente = crud.create_pending_email_event(
+            db,
+            patient_id=patient.id,
+            email_subject="Resultado",
+            email_from="marlon@hotmail.com",
+            email_date="",
+            preview_type="pdf",
+            preview_content=base64.standard_b64encode(b"%PDF-falso").decode("ascii"),
+            preview_media_type="application/pdf",
+            extracted_json=None,
+            error="Este PDF está protegido con contraseña. Ingrésala en el campo de abajo.",
+        )
+        pending_id = pendiente.id
+    finally:
+        db.close()
+
+    extraido_falso = {
+        "resource_type": "Observation",
+        "event_date_text": "01/09/2026",
+        "event_date_sort": "2026-09-01",
+        "title": "Hemoglobina",
+        "detail": "",
+        "value": "14.5 g/dL",
+        "reference_range": "",
+        "institution": "",
+        "notes_for_user": "",
+    }
+
+    def fake_extract(pdf_bytes, password=None):
+        assert password == "1234567890"
+        return extraido_falso
+
+    import app.routers.correo as correo_module
+
+    monkeypatch.setattr(correo_module, "extract_health_event_from_pdf", fake_extract)
+
+    resp = client.post(
+        f"/correo/{pending_id}/reintentar-pdf",
+        data={"contrasena": "1234567890"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    db = TestingSessionLocal()
+    try:
+        actualizado = crud.get_pending_email_event(db, pending_id)
+        assert actualizado.error is None
+        assert "Hemoglobina" in actualizado.extracted_json
+    finally:
+        db.close()
+
+
+def test_reintentar_pdf_con_contrasena_incorrecta_mantiene_error(client, monkeypatch):
+    import base64
+
+    from app.ai_extract import AIExtractionError
+
+    patient = _crear_paciente_activo()
+    db = TestingSessionLocal()
+    try:
+        pendiente = crud.create_pending_email_event(
+            db,
+            patient_id=patient.id,
+            email_subject="Resultado",
+            email_from="marlon@hotmail.com",
+            email_date="",
+            preview_type="pdf",
+            preview_content=base64.standard_b64encode(b"%PDF-falso").decode("ascii"),
+            preview_media_type="application/pdf",
+            extracted_json=None,
+            error="Este PDF está protegido con contraseña. Ingrésala en el campo de abajo.",
+        )
+        pending_id = pendiente.id
+    finally:
+        db.close()
+
+    def fake_extract(pdf_bytes, password=None):
+        raise AIExtractionError("La contraseña que ingresaste no es correcta para este PDF.")
+
+    import app.routers.correo as correo_module
+
+    monkeypatch.setattr(correo_module, "extract_health_event_from_pdf", fake_extract)
+
+    resp = client.post(
+        f"/correo/{pending_id}/reintentar-pdf",
+        data={"contrasena": "clave-mala"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    db = TestingSessionLocal()
+    try:
+        actualizado = crud.get_pending_email_event(db, pending_id)
+        assert actualizado.extracted_json is None
+        assert "no es correcta" in actualizado.error
+    finally:
+        db.close()
+
+
 def test_descartar_pendiente_lo_elimina_sin_crear_evento(client):
     patient = _crear_paciente_activo()
     db = TestingSessionLocal()
