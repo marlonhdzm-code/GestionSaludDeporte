@@ -23,6 +23,16 @@ def list_patients(db: Session) -> list[models.Patient]:
     return list(db.scalars(select(models.Patient)))
 
 
+def update_patient_email(db: Session, patient_id: int, email: str) -> models.Patient | None:
+    db_patient = get_patient(db, patient_id)
+    if db_patient is None:
+        return None
+    db_patient.email = email
+    db.commit()
+    db.refresh(db_patient)
+    return db_patient
+
+
 # --- HealthEvent ---------------------------------------------------------------
 
 def create_event(db: Session, event: schemas.HealthEventCreate) -> models.HealthEvent:
@@ -83,3 +93,34 @@ def counts_by_category(db: Session, patient_id: int) -> dict[str, int]:
     for e in events:
         counts[e.resource_type.value] += 1
     return counts
+
+
+# --- PendingEmailEvent --------------------------------------------------------
+
+def create_pending_email_event(db: Session, **fields) -> models.PendingEmailEvent:
+    db_pending = models.PendingEmailEvent(**fields)
+    db.add(db_pending)
+    db.commit()
+    db.refresh(db_pending)
+    return db_pending
+
+
+def get_pending_email_event(db: Session, pending_id: int) -> models.PendingEmailEvent | None:
+    return db.get(models.PendingEmailEvent, pending_id)
+
+
+def list_pending_email_events(db: Session, patient_id: int | None = None) -> list[models.PendingEmailEvent]:
+    stmt = select(models.PendingEmailEvent)
+    if patient_id is not None:
+        stmt = stmt.where(models.PendingEmailEvent.patient_id == patient_id)
+    stmt = stmt.order_by(models.PendingEmailEvent.created_at.desc())
+    return list(db.scalars(stmt))
+
+
+def delete_pending_email_event(db: Session, pending_id: int) -> bool:
+    db_pending = get_pending_email_event(db, pending_id)
+    if db_pending is None:
+        return False
+    db.delete(db_pending)
+    db.commit()
+    return True

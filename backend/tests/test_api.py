@@ -6,46 +6,17 @@ Correr con:
     cd backend
     pytest
 """
-import pytest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from app.database import Base, get_db
 from app.main import app
 
-# StaticPool: una sola conexión compartida para toda la vida del engine. Sin esto,
-# cada sesión abre una conexión SQLite ":memory:" nueva (es decir, una base vacía
-# distinta), y los datos creados en un request desaparecen para el siguiente.
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
+# El engine/override de get_db y la limpieza de la BD entre pruebas viven en
+# conftest.py, compartidos con los demas archivos de test que usan TestClient
+# (evita que dos archivos se pisen el override de get_db entre si -- ver el
+# docstring de conftest.py).
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def _clean_db():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
 
 
 def test_create_and_list_patient():

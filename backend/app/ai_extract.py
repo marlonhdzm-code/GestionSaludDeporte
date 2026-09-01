@@ -66,6 +66,45 @@ Si la imagen no parece ser un documento de salud, responde con "resource_type": 
 explica la situación en "notes_for_user"."""
 
 
+def _build_email_prompt(subject: str, body_text: str) -> str:
+    return f"""Eres un asistente que ayuda a transcribir informacion de salud desde el CUERPO \
+DE TEXTO de un correo reenviado (por ejemplo el resultado de un laboratorio pegado directo en \
+el mensaje, o una nota escrita por el paciente) hacia un registro estructurado. Es MUY \
+importante que seas preciso: nunca inventes, redondees ni completes un valor que no puedas \
+leer con claridad en el texto.
+
+Las categorias disponibles (estandar HL7 FHIR) son:
+{RESOURCE_TYPE_GUIDE}
+
+Asunto del correo: {subject or '(sin asunto)'}
+
+Cuerpo del correo:
+---
+{body_text}
+---
+
+Muchos correos reenviados NO tienen informacion medica util en el cuerpo -- por ejemplo, solo \
+dicen "ver adjunto", son una firma de correo, una cadena de reenvios sin contenido, o \
+publicidad del laboratorio. Si este es el caso, responde UNICAMENTE con este JSON exacto:
+
+{{"no_relevant_data": true}}
+
+Si SI hay informacion medica aprovechable en el cuerpo del texto, responde UNICAMENTE con un \
+objeto JSON (sin texto antes ni despues, sin bloque de codigo markdown) con esta forma exacta:
+
+{{
+  "resource_type": "una de las 7 categorias de arriba, la que mejor aplique",
+  "event_date_text": "la fecha tal como aparece en el texto, como texto (ej. '24/06/2024'); si no se ve ninguna fecha, usa null",
+  "event_date_sort": "la misma fecha en formato YYYY-MM-DD si se puede determinar con certeza, si no null",
+  "title": "un titulo corto del evento (ej. 'Colesterol LDL', 'Ecografia renal', 'Valsartan')",
+  "detail": "detalle o descripcion adicional visible en el texto, o null",
+  "value": "el valor o resultado principal tal como aparece (con su unidad), o null",
+  "reference_range": "el rango de referencia si aparece en el texto, o null",
+  "institution": "la institucion, laboratorio o profesional que aparece en el texto, o null",
+  "notes_for_user": "una frase corta en espanol avisando si algo en el texto no se pudo interpretar con claridad, o null si todo se leyo bien"
+}}"""
+
+
 def _build_pdf_prompt(pdf_text: str) -> str:
     return f"""Eres un asistente que ayuda a transcribir información de salud desde el texto \
 de un PDF (un resultado de laboratorio, una orden médica, un carné de vacunación, etc.) hacia \
@@ -201,6 +240,34 @@ def _normalize_extracted(data: dict) -> dict:
         "institution": data.get("institution") or "",
         "notes_for_user": data.get("notes_for_user") or "",
     }
+
+
+def extract_health_event_from_email_text(subject: str, body_text: str) -> dict | None:
+    """
+    Analiza el cuerpo de texto de un correo (sin adjunto) y devuelve un
+    diccionario con los campos de HealthEvent (sin patient_id), igual que
+    los otros extractores. Devuelve None cuando la IA determina que el
+    cuerpo del correo no tiene informacion medica util (firma, "ver
+    adjunto", publicidad, etc.) -- en ese caso no debe crearse ningun
+    evento pendiente para el cuerpo del correo. Lanza AIExtractionError si
+    la llamada a la IA falla.
+    """
+    client = _client()
+    try:
+        response = client.messages.create(
+            model=config.ANTHROPIC_MODEL,
+            max_tokens=1024,
+            temperature=0,
+            messages=[{"role": "user", "content": _build_email_prompt(subject, body_text)}],
+        )
+    except Exception as exc:  # anthropic.APIError y subclases
+        raise AIExtractionError(f"No se pudo contactar a la API de Claude: {exc}") from exc
+
+    raw_text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+    data = _parse_json_response(raw_text)
+    if data.get("no_relevant_data"):
+        return None
+    return _normalize_extracted(data)
 
 
 def extract_health_event_from_pdf(pdf_bytes: bytes, password: str | None = None) -> dict:

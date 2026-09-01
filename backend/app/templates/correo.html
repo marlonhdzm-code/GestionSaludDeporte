@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Importar por correo — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Importar reenviando un correo</h1>
+  <p class="subtitle">
+    Reenvía el correo de tu laboratorio o EPS (con el resultado en el cuerpo, o como adjunto PDF/foto)
+    a la dirección pasarela de abajo, y la app lo procesará como si lo hubieras subido a mano.
+  </p>
+
+  {% if not email_ingest_configured %}
+    <div class="notice notice-error">
+      <strong>Esta función todavía no está configurada.</strong>
+      Falta crear la cuenta de Gmail pasarela y definir <code>GMAIL_ADDRESS</code> /
+      <code>GMAIL_APP_PASSWORD</code> en el archivo <code>.env</code>.
+    </div>
+  {% else %}
+    <div class="notice">
+      <strong>Dirección pasarela:</strong> <code>{{ gmail_address }}</code><br>
+      Reenvía tu correo ahí. La app también revisa la bandeja automáticamente cada
+      {{ email_poll_minutes }} minutos, aunque no aprietes "Revisar ahora".
+    </div>
+
+    <form method="post" action="/correo/registrar-email" class="form" style="max-width:420px">
+      <label>Tu correo (desde donde vas a reenviar)
+        <input type="email" name="correo_autorizado" required
+               value="{{ patient.email if patient and patient.email else '' }}"
+               placeholder="tu.correo@ejemplo.com">
+      </label>
+      <p class="subtitle">
+        Solo se procesan correos que lleguen exactamente desde esta dirección — cualquier otro
+        remitente en la bandeja pasarela se ignora sin usar la IA.
+      </p>
+      <button type="submit">Guardar mi correo</button>
+    </form>
+
+    <form method="post" action="/correo/revisar" style="margin-top:1rem">
+      <button type="submit">Ya reenvié — revisar ahora</button>
+    </form>
+
+    {% if resumen %}
+      {% if resumen.ok %}
+        <div class="notice">
+          Revisados {{ resumen.mensajes_revisados }} correo(s) nuevo(s).
+          {{ resumen.pendientes_nuevos }} quedaron pendientes de confirmar abajo.
+          {% if resumen.no_reconocidos and resumen.no_reconocidos != "0" %}
+            ({{ resumen.no_reconocidos }} correo(s) de remitentes no reconocidos se ignoraron.)
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="notice notice-error"><strong>No se pudo revisar la bandeja.</strong> {{ resumen.error }}</div>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+
+  <h2 style="margin-top:2rem">Pendientes de confirmar ({{ pendientes|length }})</h2>
+  {% if not pendientes %}
+    <p class="subtitle">No hay nada pendiente por ahora.</p>
+  {% else %}
+    <ul class="pending-list">
+      {% for p in pendientes %}
+        <li>
+          <a href="/correo/{{ p.item.id }}">
+            {% if p.item.error %}
+              ⚠️ {{ p.item.email_subject or "(sin asunto)" }} — no se pudo analizar
+            {% else %}
+              {{ p.extraido.title if p.extraido else "(sin título)" }}
+              — {{ p.extraido.event_date_text if p.extraido else "" }}
+            {% endif %}
+          </a>
+          <span class="subtitle">de {{ p.item.email_from }}, {{ p.item.preview_type }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endblock %}

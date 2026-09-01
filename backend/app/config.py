@@ -28,3 +28,15 @@ ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929"
 ANTHROPIC_WORKSPACE_ID = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
 
 AI_CONFIGURED = bool(ANTHROPIC_API_KEY)
+
+# --- Ingesta por correo (bandeja pasarela de Gmail) -----------------------
+# Cuenta de Gmail dedicada y separada de tu correo personal, usada solo como
+# "buzon pasarela": tu reenvias ahi los correos de laboratorios/EPS, y la app
+# los revisa por IMAP. Nunca se guarda tu contrasena real de Gmail: se usa
+# una "contrasena de aplicacion" (App Password), que solo funciona para IMAP
+# y se puede revocar en cualquier momento sin afectar tu cuenta de Gmail.
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "").strip()
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+EMAIL_POLL_MINUTES = int(os.environ.get("EMAIL_POLL_MINUTES", "15") or "15")
+
+EMAIL_INGEST_CONFIGURED = bool(GMAIL_ADDRESS and GMAIL_APP_PASSWORD)

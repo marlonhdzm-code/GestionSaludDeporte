@@ -133,10 +133,11 @@ GestionSaludDeporte/
 
 ## Hoja de ruta
 
-Ver [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) para el detalle técnico y las siguientes
-fases: seguridad y autenticación real para multiusuario, ingesta por correo/reenvío (para que
-cualquier persona pueda cargar sus resultados solo reenviando el correo del laboratorio),
-exportación FHIR real, y el motor de correlación con IA para alertas y planes de salud.
+Ya puedes importar reenviando un correo a una bandeja de Gmail pasarela (ver `/correo` en la
+app) — funciona como MVP de un solo paciente. Ver [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md)
+para el detalle técnico y las siguientes fases: seguridad y autenticación real para multiusuario
+(necesaria antes de ofrecer esto a terceros), exportación FHIR real, y el motor de correlación
+con IA para alertas y planes de salud.
 
 ## Aviso
 
