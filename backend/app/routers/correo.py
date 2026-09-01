@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from .. import config, crud, schemas
 from ..database import get_db
+from ..ai_extract import AIExtractionError, extract_health_event_from_pdf
 from ..email_ingest import revisar_bandeja_entrada
 from .pages import RESOURCE_LABELS, _current_patient, _selector_context
 
@@ -147,3 +148,32 @@ def correo_confirmar_pendiente(
 def correo_descartar_pendiente(pending_id: int, db: Session = Depends(get_db)):
     crud.delete_pending_email_event(db, pending_id)
     return RedirectResponse(url="/correo", status_code=303)
+
+
+@router.post("/{pending_id}/reintentar-pdf")
+def correo_reintentar_pdf(pending_id: int, contrasena: str = Form(""), db: Session = Depends(get_db)):
+    """
+    Cuando un adjunto PDF llegado por correo pide contrasena (ej. la cedula,
+    como piden algunos laboratorios), no hay forma de pedirsela al usuario en
+    el momento -- el correo se proceso en segundo plano, sin nadie mirando.
+    Esta ruta permite reintentar la extraccion ya con la contrasena, sin
+    tener que reenviar el correo de nuevo.
+    """
+    pendiente = crud.get_pending_email_event(db, pending_id)
+    if pendiente is None or pendiente.preview_type != "pdf":
+        return RedirectResponse(url="/correo", status_code=303)
+
+    import base64
+    import json
+
+    pdf_bytes = base64.standard_b64decode(pendiente.preview_content)
+    try:
+        extraido = extract_health_event_from_pdf(pdf_bytes, password=contrasena or None)
+        crud.update_pending_email_event_extraction(
+            db, pending_id, extracted_json=json.dumps(extraido), error=None
+        )
+    except AIExtractionError as exc:
+        crud.update_pending_email_event_extraction(
+            db, pending_id, extracted_json=None, error=str(exc)
+        )
+    return RedirectResponse(url=f"/correo/{pending_id}", status_code=303)

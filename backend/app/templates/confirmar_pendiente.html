@@ -22,8 +22,19 @@
         <div class="notice notice-error">
           <strong>No se pudo analizar esto.</strong> {{ pendiente.error }}
         </div>
-        <form method="post" action="/correo/{{ pendiente.id }}/descartar">
-          <button type="submit">Descartar</button>
+
+        {% if pendiente.preview_type == "pdf" %}
+          <form method="post" action="/correo/{{ pendiente.id }}/reintentar-pdf" class="form">
+            <label>Contraseña del PDF (si te la pide para abrirse)
+              <input type="password" name="contrasena" autocomplete="off"
+                     placeholder="ej. tu número de cédula">
+            </label>
+            <button type="submit">Reintentar con esta contraseña</button>
+          </form>
+        {% endif %}
+
+        <form method="post" action="/correo/{{ pendiente.id }}/descartar" style="margin-top:0.5rem">
+          <button type="submit" class="secondary">Descartar</button>
         </form>
       {% else %}
         {% if extraido.notes_for_user %}

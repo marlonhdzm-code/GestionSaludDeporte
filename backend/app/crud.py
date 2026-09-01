@@ -124,3 +124,16 @@ def delete_pending_email_event(db: Session, pending_id: int) -> bool:
     db.delete(db_pending)
     db.commit()
     return True
+
+
+def update_pending_email_event_extraction(
+    db: Session, pending_id: int, extracted_json: str | None, error: str | None
+) -> models.PendingEmailEvent | None:
+    db_pending = get_pending_email_event(db, pending_id)
+    if db_pending is None:
+        return None
+    db_pending.extracted_json = extracted_json
+    db_pending.error = error
+    db.commit()
+    db.refresh(db_pending)
+    return db_pending
