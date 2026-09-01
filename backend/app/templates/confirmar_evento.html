@@ -6,7 +6,11 @@
 
   <div class="review-layout">
     <div class="review-image">
-      <img src="{{ image_data_uri }}" alt="Foto del documento subido">
+      {% if preview_type == "pdf" %}
+        <embed src="{{ preview_data_uri }}" type="application/pdf" class="pdf-preview">
+      {% else %}
+        <img src="{{ preview_data_uri }}" alt="Foto del documento subido">
+      {% endif %}
     </div>
 
     <div class="review-form">
@@ -62,7 +66,7 @@
           </label>
 
           <label>Fuente
-            <input type="text" name="source" value="Foto analizada con IA — confirmado por el paciente">
+            <input type="text" name="source" value="{{ default_source }}">
           </label>
 
           <button type="submit">Confirmar y guardar</button>

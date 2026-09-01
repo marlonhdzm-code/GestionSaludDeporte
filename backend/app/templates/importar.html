@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Importar — Gestión Salud y Deporte{% endblock %}
 {% block content %}
-  <h1>Importar desde una foto</h1>
+  <h1>Importar desde una foto o un PDF</h1>
   <p class="subtitle">
-    Sube la foto de un resultado, una orden médica o un carné de vacunación. La IA va a leer
+    Sube la foto de un resultado, una orden médica o un carné de vacunación — o el PDF digital
+    que te haya llegado por correo (el de texto seleccionable, no un escaneo). La IA va a leer
     el contenido y te va a mostrar lo que detectó para que lo confirmes o corrijas — nada se
     guarda automáticamente.
   </p>
@@ -18,11 +19,14 @@
     </div>
   {% else %}
     <form method="post" action="/importar/analizar" enctype="multipart/form-data" class="form">
-      <label>Foto del documento
-        <input type="file" name="foto" accept="image/*" capture="environment" required>
+      <label>Foto o PDF del documento
+        <input type="file" name="documento" accept="image/*,application/pdf" required>
       </label>
       <button type="submit">Analizar con IA</button>
     </form>
-    <p class="hint">Formatos soportados: JPEG, PNG, WEBP, GIF. Máximo 15 MB.</p>
+    <p class="hint">
+      Fotos: JPEG, PNG, WEBP, GIF. PDF: solo si el texto es seleccionable (no un escaneo — para
+      eso, sube una foto de la página en su lugar). Máximo 15 MB.
+    </p>
   {% endif %}
 {% endblock %}

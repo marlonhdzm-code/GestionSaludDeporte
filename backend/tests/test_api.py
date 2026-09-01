@@ -127,7 +127,7 @@ def test_importar_analizar_shows_friendly_error_without_api_key(monkeypatch):
     monkeypatch.setattr("app.config.AI_CONFIGURED", False)
     resp = client.post(
         "/importar/analizar",
-        files={"foto": ("test.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes", "image/jpeg")},
+        files={"documento": ("test.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes", "image/jpeg")},
     )
     assert resp.status_code == 200
     assert "No se pudo analizar" in resp.text
@@ -154,12 +154,66 @@ def test_importar_analizar_prefills_confirmation_form(monkeypatch):
 
     resp = client.post(
         "/importar/analizar",
-        files={"foto": ("test.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes", "image/jpeg")},
+        files={"documento": ("test.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes", "image/jpeg")},
     )
     assert resp.status_code == 200
     assert "Glucosa en ayunas" in resp.text
     assert "92 mg/dL" in resp.text
     assert 'action="/eventos/nuevo"' in resp.text
+
+
+def test_importar_analizar_pdf_uses_pdf_extractor(monkeypatch):
+    """Un archivo con content-type application/pdf debe pasar por el
+    extractor de PDF, no por el de imagen, y prellenar el formulario igual."""
+
+    def fake_extract_pdf(pdf_bytes):
+        return {
+            "resource_type": "Observation",
+            "event_date_text": "10/02/2026",
+            "event_date_sort": "2026-02-10",
+            "title": "Hemoglobina",
+            "detail": "",
+            "value": "14.5 g/dL",
+            "reference_range": "13.5 - 17",
+            "institution": "Laboratorio SURA",
+            "notes_for_user": "",
+        }
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("no debería llamarse al extractor de imagen para un PDF")
+
+    monkeypatch.setattr("app.routers.ingest.extract_health_event_from_pdf", fake_extract_pdf)
+    monkeypatch.setattr("app.routers.ingest.extract_health_event_from_image", fail_if_called)
+
+    resp = client.post(
+        "/importar/analizar",
+        files={"documento": ("resultado.pdf", b"%PDF-1.4 fake-pdf-bytes", "application/pdf")},
+    )
+    assert resp.status_code == 200
+    assert "Hemoglobina" in resp.text
+    assert "PDF analizado con IA" in resp.text
+
+
+def test_importar_analizar_pdf_without_text_shows_friendly_error(monkeypatch):
+    """Un PDF sin texto extraíble (escaneado) debe dar un mensaje de error
+    claro en vez de fallar feo."""
+    monkeypatch.setattr("app.config.AI_CONFIGURED", True)
+
+    def fake_extract_pdf_scanned(pdf_bytes):
+        from app.ai_extract import AIExtractionError
+
+        raise AIExtractionError(
+            "Este PDF no tiene texto que se pueda extraer (probablemente es un escaneo)."
+        )
+
+    monkeypatch.setattr("app.routers.ingest.extract_health_event_from_pdf", fake_extract_pdf_scanned)
+
+    resp = client.post(
+        "/importar/analizar",
+        files={"documento": ("escaneo.pdf", b"%PDF-1.4 fake-scanned", "application/pdf")},
+    )
+    assert resp.status_code == 200
+    assert "no tiene texto que se pueda extraer" in resp.text
 
 
 def test_tendencias_page_loads_with_no_data():
