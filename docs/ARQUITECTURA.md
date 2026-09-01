@@ -199,20 +199,77 @@ fechas, qué se espera que la IA detecte) está en
 [`ANOMALIAS_PRUEBA_GREG.md`](ANOMALIAS_PRUEBA_GREG.md) — deliberadamente no se le da esa
 respuesta a la IA antes de evaluarla.
 
-## Fase 4 — Multiusuario y despliegue en la nube (planeada)
+## Fase 4 — Multiusuario, seguridad y despliegue en la nube (planeada, prioridad adelantada 01/09/2026)
 
-Cuando el objetivo pase de "mi app personal" a "una app que otras personas puedan usar":
+Cuando el objetivo pase de "mi app personal" a "una app que otras personas puedan usar", la
+seguridad deja de ser opcional: **no se debe abrir esta app a otras personas hasta que estos
+puntos estén resueltos**, no solo los de infraestructura.
+
+**Requisitos de seguridad (bloqueantes antes de multiusuario real):**
 
 1. **Autenticación de usuarios** (login, sesiones) — cada usuario ve solo sus propios
-   pacientes/eventos. FastAPI tiene soporte maduro para esto (OAuth2/JWT).
-2. **Migrar la base de datos a Postgres** (Supabase, Railway, RDS, etc.) — un solo cambio de
+   pacientes/eventos. FastAPI tiene soporte maduro para esto (OAuth2/JWT). El selector de
+   paciente por cookie (implementado 01/09/2026) es solo una comodidad de desarrollo, **no es
+   seguridad** — cualquiera con acceso al navegador puede cambiar de paciente.
+2. **Aislamiento por usuario a nivel de base de datos**, no solo de interfaz — una consulta mal
+   filtrada no debe poder devolver datos de otro usuario.
+3. **Cifrado**: HTTPS siempre en tránsito; cifrado en reposo para la base de datos una vez deje
+   de ser un archivo SQLite local en la máquina del propio usuario.
+4. **Minimizar qué se envía a la IA y por cuánto tiempo se guarda**, en cualquier canal de
+   ingesta (foto, PDF, correo) — mismo principio ya aplicado en la Fase 1: se envía a la API de
+   Claude solo para el análisis puntual, no se retiene del lado del servidor más allá de la
+   sesión de confirmación.
+5. **Revisión legal antes de manejar datos de un segundo usuario real** (no de prueba): en
+   Colombia aplica la Ley 1581 de 2012 (habeas data), con especial cuidado por tratarse de
+   datos de salud. Esto aplica desde el primer usuario real adicional, no solo al integrarse
+   con instituciones (Fase 5).
+
+**Requisitos de infraestructura:**
+
+6. **Migrar la base de datos a Postgres** (Supabase, Railway, RDS, etc.) — un solo cambio de
    variable de entorno, sin reescribir el modelo de datos.
-3. **Migraciones de esquema con Alembic**, en vez de `Base.metadata.create_all()` (que solo
+7. **Migraciones de esquema con Alembic**, en vez de `Base.metadata.create_all()` (que solo
    sirve para desarrollo local).
-4. **Despliegue** en un servicio como Railway, Render o Fly.io — el mismo código FastAPI corre
-   sin cambios, solo se agrega un `Dockerfile`.
-5. **Frontend dedicado** (opcional, si la interfaz Jinja2 se queda corta): un frontend en React
+8. **Despliegue** en un servicio como Railway, Render o Fly.io — el mismo código FastAPI corre
+   sin cambios, solo se agrega un `Dockerfile`. Necesario, entre otras cosas, para tener una URL
+   pública a la que un proveedor de correo entrante pueda reenviar mensajes (ver ingesta por
+   correo, abajo).
+9. **Frontend dedicado** (opcional, si la interfaz Jinja2 se queda corta): un frontend en React
    o similar que consuma la API `/api/...` ya existente, sin tocar el backend.
+
+## Ingesta por correo / reenvío (planeada, depende de Fase 4)
+
+**Objetivo:** que una persona no técnica pueda cargar sus resultados simplemente reenviando el
+correo del laboratorio o la EPS a una dirección personal — sin fotografiar nada, sin llenar
+formularios. Es, en la práctica, el canal de menor fricción posible: la mayoría de resultados
+ya le llegan a la gente por correo.
+
+**Diseño previsto:**
+
+1. Cada usuario (ya autenticado, Fase 4) tiene una dirección de reenvío única, ej.
+   `usuario.a3f9@registros.<dominio-de-la-app>`.
+2. Un proveedor de recepción de correo entrante (ej. Mailgun Routes, Postmark Inbound, o el
+   Inbound Parse de SendGrid) recibe el correo reenviado y lo entrega vía webhook a un nuevo
+   endpoint de la API (`POST /api/ingest/email`, a definir).
+3. El endpoint extrae el texto y los adjuntos (PDF/imagen) del correo y reutiliza el mismo
+   patrón de análisis con IA de la Fase 1/PDF digital (ver abajo) para estructurar el evento.
+4. **La confirmación humana sigue siendo obligatoria** — igual que con la foto, nada se guarda
+   solo; se le notifica al usuario (dentro de la app, o por correo) que tiene un evento
+   pendiente de confirmar.
+5. Requiere que la app esté desplegada con una URL pública (punto 8 de la Fase 4) y con
+   autenticación real (para saber a qué usuario pertenece cada dirección de reenvío) —
+   **no es viable mientras la app corra solo en local en la máquina de cada usuario**, como hoy.
+
+**Elección de proveedor de correo entrante:** pendiente de decidir con el usuario cuando se
+llegue a este punto — implica crear una cuenta externa (y posiblemente un costo recurrente),
+algo que le corresponde decidir y ejecutar directamente al usuario, no a Claude.
+
+**Paso intermedio ya buildable hoy, sin depender de Fase 4:** completar el soporte de **PDF
+digital** dentro de la Fase 1 (ya estaba pendiente ahí) — extraer texto de un PDF ya
+seleccionable con `pdfplumber` y reutilizar `ai_extract.py`. Esto no requiere hosting público
+ni cuentas externas: el usuario descarga el adjunto del correo que recibió y lo sube manualmente
+por `/importar`, igual que hace hoy con una foto. Es el mismo motor de extracción que después
+usaría el flujo de reenvío automático, así que construirlo ahora no es trabajo perdido.
 
 ---
 
