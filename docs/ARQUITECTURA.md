@@ -237,39 +237,52 @@ puntos estén resueltos**, no solo los de infraestructura.
 9. **Frontend dedicado** (opcional, si la interfaz Jinja2 se queda corta): un frontend en React
    o similar que consuma la API `/api/...` ya existente, sin tocar el backend.
 
-## Ingesta por correo / reenvío (planeada, depende de Fase 4)
+## Ingesta por correo / reenvío (implementada 01/09/2026, MVP de un solo usuario)
 
 **Objetivo:** que una persona no técnica pueda cargar sus resultados simplemente reenviando el
 correo del laboratorio o la EPS a una dirección personal — sin fotografiar nada, sin llenar
 formularios. Es, en la práctica, el canal de menor fricción posible: la mayoría de resultados
 ya le llegan a la gente por correo.
 
-**Diseño previsto:**
+**Diseño implementado — más simple que el diseño original con webhooks (ver historial de este
+archivo si hace falta la versión anterior):** en vez de necesitar hosting público con URL propia
+y un proveedor de correo entrante de pago (Mailgun/Postmark/SendGrid, que requerían dominio
+propio y una cuenta externa), la app usa una bandeja de **Gmail dedicada** ("pasarela") que
+revisa por **IMAP** — protocolo estándar de lectura de correo, sin webhooks:
 
-1. Cada usuario (ya autenticado, Fase 4) tiene una dirección de reenvío única, ej.
-   `usuario.a3f9@registros.<dominio-de-la-app>`.
-2. Un proveedor de recepción de correo entrante (ej. Mailgun Routes, Postmark Inbound, o el
-   Inbound Parse de SendGrid) recibe el correo reenviado y lo entrega vía webhook a un nuevo
-   endpoint de la API (`POST /api/ingest/email`, a definir).
-3. El endpoint extrae el texto y los adjuntos (PDF/imagen) del correo y reutiliza el mismo
-   patrón de análisis con IA de la Fase 1/PDF digital (ver abajo) para estructurar el evento.
-4. **La confirmación humana sigue siendo obligatoria** — igual que con la foto, nada se guarda
-   solo; se le notifica al usuario (dentro de la app, o por correo) que tiene un evento
-   pendiente de confirmar.
-5. Requiere que la app esté desplegada con una URL pública (punto 8 de la Fase 4) y con
-   autenticación real (para saber a qué usuario pertenece cada dirección de reenvío) —
-   **no es viable mientras la app corra solo en local en la máquina de cada usuario**, como hoy.
+1. Se crea una cuenta de Gmail nueva, separada de cualquier correo personal, dedicada solo a
+   recibir estos reenvíos (ej. `misregistros.<algo>@gmail.com`).
+2. El paciente reenvía el correo del laboratorio/EPS a esa dirección.
+3. La app se conecta por IMAP (`imaplib`, librería estándar de Python) a esa bandeja —
+   automáticamente cada `EMAIL_POLL_MINUTES` (por defecto 15) vía un job en segundo plano
+   (`APScheduler`), y también bajo demanda con el botón "Ya reenvié — revisar ahora" en
+   `/correo`.
+4. Solo se procesan correos cuyo remitente coincida **exactamente** con el correo registrado del
+   paciente (`Patient.email`, editable en `/correo`) — cualquier otro remitente (spam,
+   publicidad) se ignora sin gastar una sola llamada a la IA.
+5. Se extrae tanto el **cuerpo de texto** del correo (si tiene contenido médico útil — la propia
+   IA descarta cuerpos irrelevantes tipo "ver adjunto" o firmas) como los **adjuntos** (PDF o
+   foto), reutilizando el mismo motor de extracción de la Fase 1 (`ai_extract.py`).
+6. **La confirmación humana sigue siendo obligatoria.** Nada se guarda como `HealthEvent` de
+   una — cada candidato queda en la tabla `PendingEmailEvent` hasta que el paciente lo revisa y
+   confirma (o lo descarta) en `/correo/{id}`, con la misma pantalla de revisión que ya se usaba
+   para foto/PDF.
+7. La contraseña real de la cuenta de Gmail nunca se usa ni se guarda: Gmail exige activar
+   verificación en 2 pasos y generar una "contraseña de aplicación" específica para IMAP,
+   revocable en cualquier momento sin afectar el acceso normal a la cuenta — es lo único que va
+   en `GMAIL_APP_PASSWORD` dentro de `.env`.
 
-**Elección de proveedor de correo entrante:** pendiente de decidir con el usuario cuando se
-llegue a este punto — implica crear una cuenta externa (y posiblemente un costo recurrente),
-algo que le corresponde decidir y ejecutar directamente al usuario, no a Claude.
+**Por qué es solo MVP de un usuario por ahora:** el filtro por remitente (`Patient.email`) hace
+las veces de "autenticación" mínima mientras no exista la Fase 4 real — funciona bien para un
+solo paciente real (o unos pocos, cada uno con su correo distinto registrado), pero no reemplaza
+aislamiento de datos ni autenticación real a nivel de sesión/cuenta. Antes de ofrecerle esto a
+terceros no relacionados habría que completar la Fase 4 (autenticación real, aislamiento por
+usuario en BD, cifrado, revisión de Ley 1581/habeas data) — ver esa sección arriba.
 
-**Paso intermedio ya buildable hoy, sin depender de Fase 4:** completar el soporte de **PDF
-digital** dentro de la Fase 1 (ya estaba pendiente ahí) — extraer texto de un PDF ya
-seleccionable con `pdfplumber` y reutilizar `ai_extract.py`. Esto no requiere hosting público
-ni cuentas externas: el usuario descarga el adjunto del correo que recibió y lo sube manualmente
-por `/importar`, igual que hace hoy con una foto. Es el mismo motor de extracción que después
-usaría el flujo de reenvío automático, así que construirlo ahora no es trabajo perdido.
+**Código relevante:** `backend/app/email_ingest.py` (conexión IMAP y extracción),
+`backend/app/models.py::PendingEmailEvent` (candidatos pendientes),
+`backend/app/routers/correo.py` (rutas `/correo`), job periódico registrado en `main.py` al
+arrancar la app (solo si `GMAIL_ADDRESS`/`GMAIL_APP_PASSWORD` están configurados en `.env`).
 
 ---
 

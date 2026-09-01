@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Confirmar evento de correo — Gestión Salud y Deporte{% endblock %}
+{% block content %}
+  <h1>Confirma lo que la IA detectó en el correo</h1>
+  <p class="subtitle">
+    Asunto: {{ pendiente.email_subject or "(sin asunto)" }} — de {{ pendiente.email_from }}
+  </p>
+
+  <div class="review-layout">
+    <div class="review-image">
+      {% if pendiente.preview_type == "pdf" %}
+        <embed src="data:application/pdf;base64,{{ pendiente.preview_content }}" type="application/pdf" class="pdf-preview">
+      {% elif pendiente.preview_type == "image" %}
+        <img src="data:{{ pendiente.preview_media_type }};base64,{{ pendiente.preview_content }}" alt="Adjunto del correo">
+      {% else %}
+        <div class="notice"><strong>Cuerpo del correo:</strong><br>{{ pendiente.preview_content }}</div>
+      {% endif %}
+    </div>
+
+    <div class="review-form">
+      {% if pendiente.error %}
+        <div class="notice notice-error">
+          <strong>No se pudo analizar esto.</strong> {{ pendiente.error }}
+        </div>
+        <form method="post" action="/correo/{{ pendiente.id }}/descartar">
+          <button type="submit">Descartar</button>
+        </form>
+      {% else %}
+        {% if extraido.notes_for_user %}
+          <div class="notice"><strong>Aviso de la IA:</strong> {{ extraido.notes_for_user }}</div>
+        {% endif %}
+
+        <form method="post" action="/correo/{{ pendiente.id }}/confirmar" class="form">
+          <label>Categoría (FHIR)
+            <select name="resource_type" required>
+              {% for key, label in labels.items() %}
+                <option value="{{ key }}" {% if key == extraido.resource_type %}selected{% endif %}>
+                  {{ label }} ({{ key }})
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>Fecha (como texto)
+            <input type="text" name="event_date_text" required value="{{ extraido.event_date_text }}">
+          </label>
+
+          <label>Fecha exacta (opcional, para ordenar y graficar)
+            <input type="date" name="event_date_sort" value="{{ extraido.event_date_sort }}">
+          </label>
+
+          <label>Título / tipo de evento
+            <input type="text" name="title" required value="{{ extraido.title }}">
+          </label>
+
+          <label>Detalle
+            <textarea name="detail" rows="3">{{ extraido.detail }}</textarea>
+          </label>
+
+          <label>Valor / resultado
+            <input type="text" name="value" value="{{ extraido.value }}">
+          </label>
+
+          <label>Rango de referencia
+            <input type="text" name="reference_range" value="{{ extraido.reference_range }}">
+          </label>
+
+          <label>Institución / profesional
+            <input type="text" name="institution" value="{{ extraido.institution }}">
+          </label>
+
+          <label>Fuente
+            <input type="text" name="source" value="Correo reenviado, analizado con IA — confirmado por el paciente">
+          </label>
+
+          <button type="submit">Confirmar y guardar</button>
+        </form>
+        <form method="post" action="/correo/{{ pendiente.id }}/descartar" style="margin-top:0.5rem">
+          <button type="submit" class="secondary">Descartar</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

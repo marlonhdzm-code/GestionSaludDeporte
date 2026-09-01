@@ -81,3 +81,39 @@ class HealthEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     patient: Mapped["Patient"] = relationship(back_populates="events")
+
+
+class PendingEmailEvent(Base):
+    """
+    Un candidato a evento de salud, extraido automaticamente de un correo
+    reenviado a la bandeja pasarela (ver email_ingest.py), pendiente de que
+    el propio paciente lo revise y confirme. Nunca se convierte en
+    HealthEvent sin ese paso humano -- ver routers/correo.py.
+    """
+
+    __tablename__ = "pending_email_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+
+    # Metadatos del correo de origen, para que el usuario pueda ubicar de
+    # donde salio esto al revisarlo.
+    email_subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    email_from: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    email_date: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # "pdf", "image" o "texto" (cuerpo del correo, sin adjunto).
+    preview_type: Mapped[str] = mapped_column(String(20))
+    # Para pdf/image: el archivo en base64. Para texto: el cuerpo del correo
+    # tal como se extrajo (ya sea el usado para la IA o un extracto).
+    preview_content: Mapped[str] = mapped_column(Text)
+    preview_media_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
+    # Resultado de la extraccion con IA (JSON serializado con los mismos
+    # campos que devuelve ai_extract) o, si fallo, el mensaje de error.
+    extracted_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    patient: Mapped["Patient"] = relationship()
